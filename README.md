@@ -23,25 +23,30 @@ Claude Code ──ask_by_phone──▶ mcp-server ──POST /api/calls──�
 
 Deploy the `web/` package to Vercel (set its root directory to `web`). Add a Redis integration from the Vercel Marketplace (Upstash Redis), giving it the custom prefix `UPSTASH_REDIS_REST` — this sets `UPSTASH_REDIS_REST_KV_REST_API_URL` / `UPSTASH_REDIS_REST_KV_REST_API_TOKEN` automatically. Then set the remaining env vars from `web/.env.example` in the Vercel project settings.
 
-### 2. Create a Vapi assistant
+### 2. Create a Vapi webhook credential
 
-Sign up at [vapi.ai](https://vapi.ai) and create:
+Sign up at [vapi.ai](https://vapi.ai). Create a `webhook` credential (`POST /credential`) with a `bearer` authentication plan: `token` set to a generated secret (this becomes `VAPI_WEBHOOK_SECRET`), `headerName: "x-vapi-secret"`, `bearerPrefixEnabled: false`. Note the credential's `id`.
 
-- An **assistant**, with a system prompt along these lines:
+### 3. Create the assistant
 
-  > You are calling on behalf of Claude Code, an AI coding assistant, because it needs input from the user to continue a task. Ask exactly this question: {{question}}. Context: {{context}}. Get their answer, briefly confirm you understood it, then end the call politely.
+Create an assistant (`POST /assistant`) with:
 
-  Enable `end-of-call-report` as a server message so Vapi posts a webhook when the call ends.
+- A system prompt along these lines:
 
-- An **outbound phone number** for the assistant to call from.
+  > You are calling on behalf of Claude Code, an AI coding assistant, because it needs input from the user to continue a task. Ask exactly this question: {{question}}. Context: {{context}}. Once you have a clear answer, call `record_answer` with it, thank them, then end the call.
 
-Note the assistant ID, phone number ID, and your Vapi API key into `web`'s Vercel env vars (`VAPI_ASSISTANT_ID`, `VAPI_PHONE_NUMBER_ID`, `VAPI_API_KEY`).
+- A `record_answer` function tool (`type: "function"`, sync): one string parameter, `answer`.
+- `server`: `{ url: "<your-deployment>/api/webhooks/vapi", credentialId: "<credential id from step 2>" }`.
 
-### 3. Wire up the webhook
+`end-of-call-report` is included in `serverMessages` by default — no extra config needed; the webhook uses it only as a fallback to mark a call `failed` if it ends before `record_answer` is called.
 
-Generate a secret for `VAPI_WEBHOOK_SECRET` and set it in `web`'s env vars. Point Vapi's server URL at `<your-deployment>/api/webhooks/vapi` — either as a per-call override (see `web/src/lib/providers/vapi.ts`) or as the assistant's default server URL in the Vapi dashboard. Configure the same secret there so Vapi signs its webhook requests; confirm the exact header/payload format configured against the [Vapi server authentication docs](https://docs.vapi.ai/server-url/server-authentication) and `web/src/lib/verify-vapi-signature.ts`.
+Note the assistant ID, and your Vapi API key, into `web`'s Vercel env vars (`VAPI_ASSISTANT_ID`, `VAPI_API_KEY`).
 
-### 4. Run `mcp-server` locally
+### 4. Create a phone number
+
+Create a phone number (`POST /phone-number`, `provider: "vapi"` for a free Vapi-hosted number, or import a Twilio/Vonage/Telnyx number). Note its ID into `VAPI_PHONE_NUMBER_ID`.
+
+### 5. Run `mcp-server` locally
 
 Build it once:
 
