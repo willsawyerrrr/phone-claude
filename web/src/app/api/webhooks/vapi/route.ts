@@ -1,47 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CallStore } from "@/lib/store";
-import { verifyVapiSignature } from "@/lib/verify-vapi-signature";
+import { verifyVapiSecret } from "@/lib/verify-vapi-secret";
+import { RECORD_ANSWER_TOOL_NAME } from "@/lib/providers/vapi";
 
-interface VapiEndOfCallMessage {
+interface ToolCall {
+  id: string;
+  function: { name: string; arguments: { answer?: string } | string };
+}
+
+interface VapiMessage {
   type: string;
   call?: { metadata?: { callId?: string } };
-  analysis?: { summary?: string };
-  transcript?: string;
+  toolCallList?: ToolCall[];
   endedReason?: string;
+}
+
+function parseAnswer(
+  args: ToolCall["function"]["arguments"],
+): string | undefined {
+  const parsed = typeof args === "string" ? JSON.parse(args) : args;
+  return parsed?.answer;
 }
 
 export async function POST(request: NextRequest) {
   const secret = process.env.VAPI_WEBHOOK_SECRET;
   const rawBody = await request.text();
 
-  if (!secret || !verifyVapiSignature(rawBody, request.headers, secret)) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  if (!secret || !verifyVapiSecret(request.headers, secret)) {
+    return NextResponse.json({ error: "Invalid secret" }, { status: 401 });
   }
 
-  const body = JSON.parse(rawBody) as { message?: VapiEndOfCallMessage };
+  const body = JSON.parse(rawBody) as { message?: VapiMessage };
   const message = body.message;
+  const callId = message?.call?.metadata?.callId;
 
-  if (message?.type !== "end-of-call-report") {
+  if (!callId) {
     return NextResponse.json({ ok: true });
   }
 
-  const callId = message.call?.metadata?.callId;
-  if (!callId) {
-    return NextResponse.json(
-      { error: "Missing callId in metadata" },
-      { status: 400 },
+  if (message?.type === "tool-calls") {
+    const call = message.toolCallList?.find(
+      (c) => c.function.name === RECORD_ANSWER_TOOL_NAME,
     );
+    const answer = call && parseAnswer(call.function.arguments);
+
+    if (call && answer) {
+      await CallStore.update(callId, { status: "answered", answer });
+    }
+
+    return NextResponse.json({
+      results: message.toolCallList?.map((c) => ({
+        toolCallId: c.id,
+        result: "Recorded.",
+      })),
+    });
   }
 
-  const answer = message.analysis?.summary || message.transcript;
-
-  if (answer) {
-    await CallStore.update(callId, { status: "answered", answer });
-  } else {
-    await CallStore.update(callId, {
-      status: "failed",
-      error: message.endedReason ?? "Call ended without an answer",
-    });
+  if (message?.type === "end-of-call-report") {
+    const existing = await CallStore.get(callId);
+    if (existing?.status === "pending") {
+      await CallStore.update(callId, {
+        status: "failed",
+        error: message.endedReason ?? "Call ended without an answer",
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

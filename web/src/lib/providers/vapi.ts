@@ -3,10 +3,20 @@ import type { StartCallParams, StartCallResult, VoiceProvider } from "./types";
 const VAPI_API_URL = "https://api.vapi.ai/call";
 
 /**
+ * Name of the function tool the assistant calls once it has the user's
+ * answer. Must match the tool configured on the assistant in the Vapi
+ * dashboard/API, see README.md.
+ */
+export const RECORD_ANSWER_TOOL_NAME = "record_answer";
+
+/**
  * Starts an outbound call via Vapi's REST API. The assistant referenced by
- * `VAPI_ASSISTANT_ID` must be configured (in the Vapi dashboard) with a
- * system prompt that reads `{{question}}` / `{{context}}` and with
- * `end-of-call-report` enabled as a server message, see README.md.
+ * `VAPI_ASSISTANT_ID` must be configured with a system prompt that reads
+ * `{{question}}` / `{{context}}`, a `record_answer` function tool, and a
+ * `server` (url + credentialId) pointing at this app's webhook — see
+ * README.md. The webhook URL/auth live on the assistant itself rather than
+ * as a per-call override, since overriding `server` per call would drop the
+ * assistant's `credentialId` and leave the webhook unauthenticated.
  */
 export class VapiProvider implements VoiceProvider {
   async startCall(params: StartCallParams): Promise<StartCallResult> {
@@ -24,12 +34,6 @@ export class VapiProvider implements VoiceProvider {
           question: params.question,
           context: params.context ?? "",
         },
-        // Per-call server URL override, confirm this shape against
-        // https://docs.vapi.ai/api-reference/calls/create — if unsupported,
-        // set the webhook URL as the assistant's default server URL instead.
-        ...(process.env.WEBHOOK_URL
-          ? { server: { url: process.env.WEBHOOK_URL } }
-          : {}),
       },
     };
 
