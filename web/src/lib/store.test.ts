@@ -3,13 +3,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const redisStore = new Map<string, unknown>();
 
 vi.mock("@upstash/redis", () => ({
-  Redis: {
-    fromEnv: () => ({
-      set: vi.fn(async (key: string, value: unknown) => {
-        redisStore.set(key, value);
-      }),
-      get: vi.fn(async (key: string) => redisStore.get(key) ?? null),
-    }),
+  Redis: class {
+    set = vi.fn(async (key: string, value: unknown) => {
+      redisStore.set(key, value);
+    });
+    get = vi.fn(async (key: string) => redisStore.get(key) ?? null);
   },
 }));
 

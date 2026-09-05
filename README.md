@@ -21,7 +21,7 @@ Claude Code ──ask_by_phone──▶ mcp-server ──POST /api/calls──�
 
 ### 1. Deploy `web/`
 
-Deploy the `web/` package to Vercel (set its root directory to `web`). Add a Redis integration from the Vercel Marketplace (Upstash Redis) — this sets `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` automatically. Then set the remaining env vars from `web/.env.example` in the Vercel project settings.
+Deploy the `web/` package to Vercel (set its root directory to `web`). Add a Redis integration from the Vercel Marketplace (Upstash Redis), giving it the custom prefix `UPSTASH_REDIS_REST` — this sets `UPSTASH_REDIS_REST_KV_REST_API_URL` / `UPSTASH_REDIS_REST_KV_REST_API_TOKEN` automatically. Then set the remaining env vars from `web/.env.example` in the Vercel project settings.
 
 ### 2. Create a Vapi assistant
 
