@@ -21,7 +21,13 @@ function key(callId: string): string {
 }
 
 function client(): Redis {
-  return Redis.fromEnv();
+  // The Vercel Marketplace Upstash integration prefixes its own variable
+  // names (`KV_REST_API_URL`/`KV_REST_API_TOKEN`) rather than exposing the
+  // plain `UPSTASH_REDIS_REST_URL`/`_TOKEN` pair `Redis.fromEnv()` expects.
+  return new Redis({
+    url: process.env.UPSTASH_REDIS_REST_KV_REST_API_URL,
+    token: process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN,
+  });
 }
 
 export const CallStore = {
