@@ -1,0 +1,7 @@
+packages:
+  - web
+  - mcp-server
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - eslint@10.10.0
