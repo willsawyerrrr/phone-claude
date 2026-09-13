@@ -39,12 +39,21 @@ export const CallStore = {
     return client().get<CallRecord>(key(callId));
   },
 
+  /**
+   * Applies `patch` to the stored record. When `options.ifStatus` is given,
+   * the write is skipped — returning `null`, as if the record didn't exist —
+   * unless the record's current status still matches, guarding against one
+   * writer clobbering a status another writer already moved past (e.g. a
+   * cancellation racing a webhook that just recorded the answer).
+   */
   async update(
     callId: string,
     patch: Partial<Omit<CallRecord, "callId">>,
+    options?: { ifStatus: CallStatus },
   ): Promise<CallRecord | null> {
     const existing = await CallStore.get(callId);
     if (!existing) return null;
+    if (options?.ifStatus && existing.status !== options.ifStatus) return null;
 
     const updated: CallRecord = { ...existing, ...patch };
     await client().set(key(callId), updated, { ex: TTL_SECONDS });

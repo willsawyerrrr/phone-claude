@@ -2,13 +2,33 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import type { Config } from "./config.js";
 import { loadConfig } from "./config.js";
-import { pollForAnswer, startCall } from "./client.js";
+import { cancelCall, pollForAnswer, startCall } from "./client.js";
 
 const server = new McpServer({
   name: "phone-claude",
   version: "0.1.0",
 });
+
+/** The call currently being polled for, if any — set only while a call is in flight. */
+let activeCall: { config: Config; callId: string } | null = null;
+
+/**
+ * Cancels the in-flight call, if any, then exits — run on `SIGINT`/`SIGTERM`
+ * so an interrupted `ask_by_phone` doesn't leave the phone ringing after the
+ * process that was waiting on it is gone. `cancelCall` bounds its own
+ * request with a timeout, so this can't hang process shutdown.
+ */
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (activeCall) {
+    await cancelCall(activeCall.config, activeCall.callId);
+  }
+  process.exit(signal === "SIGINT" ? 130 : 143);
+}
+
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 server.registerTool(
   "ask_by_phone",
@@ -34,6 +54,7 @@ server.registerTool(
 
     try {
       const callId = await startCall(config, question, context);
+      activeCall = { config, callId };
       const answer = await pollForAnswer(config, callId);
       return { content: [{ type: "text", text: answer }] };
     } catch (error) {
@@ -47,6 +68,8 @@ server.registerTool(
         ],
         isError: true,
       };
+    } finally {
+      activeCall = null;
     }
   },
 );

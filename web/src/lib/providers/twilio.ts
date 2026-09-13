@@ -28,6 +28,14 @@ export class TwilioProvider implements VoiceProvider {
 
     return { providerCallId: call.sid };
   }
+
+  async endCall(providerCallId: string): Promise<void> {
+    const accountSid = requireEnv("TWILIO_ACCOUNT_SID");
+    const authToken = requireEnv("TWILIO_AUTH_TOKEN");
+
+    const client = new Twilio(accountSid, authToken);
+    await client.calls(providerCallId).update({ status: "completed" });
+  }
 }
 
 function requireEnv(name: string): string {

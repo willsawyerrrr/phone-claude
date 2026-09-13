@@ -4,7 +4,7 @@ Lets Claude Code call you by phone to ask a question when it's blocked, then res
 
 ## How it works
 
-Claude Code is running a task and hits a decision only you can make, while you're away from the keyboard. It calls the `ask_by_phone` MCP tool with the question. That triggers an actual outbound phone call to your number; you answer, say your decision, and hang up. Claude Code gets your spoken answer back as the tool result and keeps working.
+Claude Code is running a task and hits a decision only you can make, while you're away from the keyboard. It calls the `ask_by_phone` MCP tool with the question. That triggers an actual outbound phone call to your number; you answer, say your decision, and hang up. Claude Code gets your spoken answer back as the tool result and keeps working. If you don't pick up before the wait times out, or Claude Code is interrupted while waiting, the call is hung up rather than left ringing.
 
 ```
 Claude Code ──ask_by_phone──▶ mcp-server ──POST /api/calls──▶ web ──calls.create──▶ Twilio ──▶ your phone

@@ -1,5 +1,7 @@
 import type { Config } from "./config.js";
 
+const CANCEL_TIMEOUT_MS = 5_000;
+
 interface StartCallResponse {
   callId: string;
 }
@@ -71,9 +73,32 @@ export async function pollForAnswer(
     await sleep(config.pollIntervalMs);
   }
 
+  await cancelCall(config, callId);
   throw new Error(
     `Timed out after ${config.maxWaitMs}ms waiting for an answer`,
   );
+}
+
+/**
+ * Tells `web` to hang up a call that's no longer being waited on — the poll
+ * timed out, or the process is shutting down. Best-effort: swallows any
+ * error (including the bounded request timing out itself) since there's no
+ * one left to report a cancellation failure to, and the call will still
+ * resolve to `failed` on its own once it ends.
+ */
+export async function cancelCall(
+  config: Config,
+  callId: string,
+): Promise<void> {
+  try {
+    await fetch(`${config.apiUrl}/api/calls/${callId}/cancel`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.apiSecret}` },
+      signal: AbortSignal.timeout(CANCEL_TIMEOUT_MS),
+    });
+  } catch {
+    // Best-effort — see doc comment above.
+  }
 }
 
 function sleep(ms: number): Promise<void> {
