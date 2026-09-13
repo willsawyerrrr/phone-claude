@@ -28,12 +28,16 @@ pnpm workspace with two packages:
    marks it `failed` if the call ends before an answer is captured.
 5. The next poll from `mcp-server` observes the terminal status and returns
    the answer (or a clear failure message) as the tool result.
+6. If the poll times out, or the `mcp-server` process is interrupted
+   (`SIGINT`/`SIGTERM`) while a call is in flight, `mcp-server` POSTs to
+   `web`'s `/api/calls/:id/cancel`, which calls `VoiceProvider.endCall(...)`
+   to hang up the call and marks the `CallRecord` `failed`.
 
 ## The `VoiceProvider` seam
 
-`web/src/lib/providers/types.ts` defines `VoiceProvider`, the only place the
-call API depends on a specific voice platform. `twilio.ts` is the only
-implementation; `index.ts` selects an implementation via `VOICE_PROVIDER`.
-Adding another platform (Retell, Bland, ...) means adding one file under
-`web/src/lib/providers/` and a case in `index.ts` — nothing else in `web`
-needs to change.
+`web/src/lib/providers/types.ts` defines `VoiceProvider` (`startCall` and
+`endCall`), the only place the call API depends on a specific voice
+platform. `twilio.ts` is the only implementation; `index.ts` selects an
+implementation via `VOICE_PROVIDER`. Adding another platform (Retell,
+Bland, ...) means adding one file under `web/src/lib/providers/` and a case
+in `index.ts` — nothing else in `web` needs to change.

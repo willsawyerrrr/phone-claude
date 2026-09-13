@@ -53,4 +53,43 @@ describe("CallStore", () => {
     const updated = await CallStore.update("missing", { status: "failed" });
     expect(updated).toBeNull();
   });
+
+  it("applies an update guarded by ifStatus when the status still matches", async () => {
+    await CallStore.create({
+      callId: "call-3",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    const updated = await CallStore.update(
+      "call-3",
+      { status: "failed", error: "cancelled" },
+      { ifStatus: "pending" },
+    );
+
+    expect(updated?.status).toBe("failed");
+  });
+
+  it("skips a guarded update when the status has already moved on", async () => {
+    await CallStore.create({
+      callId: "call-4",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "answered",
+      answer: "Yes",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    const updated = await CallStore.update(
+      "call-4",
+      { status: "failed", error: "cancelled" },
+      { ifStatus: "pending" },
+    );
+
+    expect(updated).toBeNull();
+    const record = await CallStore.get("call-4");
+    expect(record?.status).toBe("answered");
+  });
 });

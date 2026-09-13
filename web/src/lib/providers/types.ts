@@ -16,5 +16,14 @@ export interface StartCallResult {
  * app knowing which platform is in use.
  */
 export interface VoiceProvider {
+  /** Places an outbound call and returns the provider's identifier for it. */
   startCall(params: StartCallParams): Promise<StartCallResult>;
+
+  /**
+   * Ends an in-progress call. Resolves once the provider has accepted the
+   * request; rejects if the provider refuses it (e.g. the call has already
+   * ended on its side) — callers that only care the call is no longer
+   * outstanding either way should treat that rejection as a no-op.
+   */
+  endCall(providerCallId: string): Promise<void>;
 }
