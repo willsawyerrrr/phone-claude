@@ -16,6 +16,16 @@ vi.mock("telnyx", () => ({
   }),
 }));
 
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  // The real `after` requires an actual Next.js request scope, which
+  // calling the route handler directly (as these tests do) doesn't
+  // provide. Running the callback immediately reproduces the same
+  // observable behavior these tests assert on: fake timers still control
+  // the `sleep` inside it.
+  after: (fn: () => void) => fn(),
+}));
+
 vi.mock("@/lib/verify-telnyx-signature", () => ({
   verifyTelnyxSignature: vi.fn(() => true),
 }));
