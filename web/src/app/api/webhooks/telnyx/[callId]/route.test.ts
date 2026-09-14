@@ -147,7 +147,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       request(event("call.speak.ended", { client_state: promptState() })),
       params(),
     );
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     await post;
 
     expect(startTranscription).toHaveBeenCalledWith("cc-1", {});
@@ -185,7 +185,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       request(event("call.speak.ended", { client_state: promptState() })),
       params(),
     );
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     await post;
 
     expect(CallStore.update).toHaveBeenCalledWith(
@@ -221,7 +221,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       request(event("call.speak.ended", { client_state: promptState() })),
       params(),
     );
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     await post;
 
     expect(speak).not.toHaveBeenCalled();
@@ -372,7 +372,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       request(event("call.speak.ended", { client_state: promptState() })),
       params(),
     );
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     await post;
 
     expect(CallStore.update).not.toHaveBeenCalled();
