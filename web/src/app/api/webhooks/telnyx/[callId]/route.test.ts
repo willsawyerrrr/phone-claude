@@ -114,6 +114,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       payload: "Deploy now? Context: Staging is green.",
       voice: "female",
       service_level: "basic",
+      language: "en-US",
       client_state: promptState(),
     });
   });
@@ -127,6 +128,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       payload: "Sorry, this call is no longer valid. Goodbye.",
       voice: "female",
       service_level: "basic",
+      language: "en-US",
       client_state: goodbyeState(),
     });
   });
@@ -185,6 +187,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       payload: "Sorry, I didn't catch that. Goodbye.",
       voice: "female",
       service_level: "basic",
+      language: "en-US",
       client_state: goodbyeState(),
     });
   });
@@ -232,6 +235,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       payload: "Got it, thanks. Goodbye.",
       voice: "female",
       service_level: "basic",
+      language: "en-US",
       client_state: goodbyeState(),
     });
   });

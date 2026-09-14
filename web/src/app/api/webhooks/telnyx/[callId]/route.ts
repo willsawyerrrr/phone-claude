@@ -8,8 +8,13 @@ import { verifyTelnyxSignature } from "@/lib/verify-telnyx-signature";
 export const maxDuration = 15;
 
 // A plain gender string is only a valid `voice` under `service_level: "basic"`
-// (the default `premium` level requires a `Provider.Model.VoiceId` value).
+// (the default `premium` level requires a `Provider.Model.VoiceId` value),
+// and `basic` in turn requires `language` to be set explicitly — omitting it
+// doesn't fall back to a default, it fails with a blank-templated error
+// ("The 'voice' parameter must be  when using the  language."), confirmed
+// against the live API.
 const VOICE = "female";
+const LANGUAGE = "en-US";
 const NO_INPUT_TIMEOUT_MS = 8_000;
 
 // Tags on the `speak` commands this route issues, echoed back on the
@@ -67,6 +72,7 @@ async function speak(
       payload: message,
       voice: VOICE,
       service_level: "basic",
+      language: LANGUAGE,
       client_state: encodeState(state),
     })
     .catch((error) => {
