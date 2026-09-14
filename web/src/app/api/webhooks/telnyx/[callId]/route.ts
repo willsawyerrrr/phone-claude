@@ -190,14 +190,25 @@ async function handleSpeakEnded(
     const record = await CallStore.get(callId);
     if (!record || record.status !== "pending") return;
 
-    await client()
-      .calls.actions.startTranscription(callControlId, {})
-      .catch((error) => {
-        // The call may already be over; the no-input timeout below will
-        // find the record already resolved and no-op.
-        console.error(`startTranscription failed for ${callControlId}:`, error);
-      });
-    await waitForAnswer(callId, callControlId, record.promptAttempt ?? 1);
+    const attempt = record.promptAttempt ?? 1;
+    if (attempt === 1) {
+      // A repeat re-speaks the prompt without stopping transcription first
+      // (see the comment in handleTranscription), so only the very first
+      // prompt needs to start it — starting it again on a repeat's
+      // call.speak.ended errors ("already in progress") because Telnyx
+      // hasn't finished tearing down the still-active session yet.
+      await client()
+        .calls.actions.startTranscription(callControlId, {})
+        .catch((error) => {
+          // The call may already be over; the no-input timeout below will
+          // find the record already resolved and no-op.
+          console.error(
+            `startTranscription failed for ${callControlId}:`,
+            error,
+          );
+        });
+    }
+    await waitForAnswer(callId, callControlId, attempt);
     return;
   }
 
@@ -269,11 +280,11 @@ async function handleTranscription(
   );
 
   if (isRepeatRequest) {
-    await client()
-      .calls.actions.stopTranscription(callControlId, {})
-      .catch((error) => {
-        console.error(`stopTranscription failed for ${callControlId}:`, error);
-      });
+    // Transcription stays running across the repeat rather than being
+    // stopped and restarted — Telnyx rejects a startTranscription issued
+    // before the previous session has finished tearing down ("already in
+    // progress"), which left a prior version of this route listening on a
+    // session that had actually failed to (re)start.
     const updated = await CallStore.update(
       callId,
       { promptAttempt: attempt + 1 },
