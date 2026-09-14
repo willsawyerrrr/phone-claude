@@ -7,6 +7,8 @@ import { verifyTelnyxSignature } from "@/lib/verify-telnyx-signature";
 // round-trips.
 export const maxDuration = 15;
 
+// A plain gender string is only a valid `voice` under `service_level: "basic"`
+// (the default `premium` level requires a `Provider.Model.VoiceId` value).
 const VOICE = "female";
 const NO_INPUT_TIMEOUT_MS = 8_000;
 
@@ -64,6 +66,7 @@ async function speak(
     .calls.actions.speak(callControlId, {
       payload: message,
       voice: VOICE,
+      service_level: "basic",
       client_state: encodeState(state),
     })
     .catch((error) => {
