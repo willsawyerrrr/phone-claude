@@ -153,6 +153,28 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
     expect(startTranscription).toHaveBeenCalledWith("cc-1", {});
   });
 
+  it("does not restart transcription on a repeat's re-prompt", async () => {
+    vi.useFakeTimers();
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      promptAttempt: 2,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    vi.mocked(CallStore.update).mockResolvedValue(null);
+
+    const post = POST(
+      request(event("call.speak.ended", { client_state: promptState() })),
+      params(),
+    );
+    await vi.advanceTimersByTimeAsync(15_000);
+    await post;
+
+    expect(startTranscription).not.toHaveBeenCalled();
+  });
+
   it("hangs up once the closing message finishes playing", async () => {
     await POST(
       request(event("call.speak.ended", { client_state: goodbyeState() })),
@@ -300,7 +322,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       params(),
     );
 
-    expect(stopTranscription).toHaveBeenCalledWith("cc-1", {});
+    expect(stopTranscription).not.toHaveBeenCalled();
     expect(CallStore.update).toHaveBeenCalledWith(
       "call-1",
       { promptAttempt: 2 },
