@@ -1,5 +1,5 @@
 import Telnyx from "telnyx";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { CallStore } from "@/lib/store";
 import { verifyTelnyxSignature } from "@/lib/verify-telnyx-signature";
 
@@ -208,7 +208,13 @@ async function handleSpeakEnded(
           );
         });
     }
-    await waitForAnswer(callId, callControlId, attempt);
+    // Scheduled to run after this webhook's response is sent, rather than
+    // holding the response open for up to NO_INPUT_TIMEOUT_MS: Telnyx's
+    // webhook delivery has its own timeout, and a response that slow risks
+    // it treating the delivery as failed and retrying the same event —
+    // observed on a live call as a second, duplicate startTranscription
+    // call ("already in progress") from the retried call.speak.ended.
+    after(() => waitForAnswer(callId, callControlId, attempt));
     return;
   }
 
