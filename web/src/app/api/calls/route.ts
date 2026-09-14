@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
     });
     await CallStore.update(callId, { providerCallId });
   } catch (error) {
+    console.error(`startCall failed for ${callId}:`, error);
     await CallStore.update(callId, {
       status: "failed",
       error: error instanceof Error ? error.message : "Failed to start call",
