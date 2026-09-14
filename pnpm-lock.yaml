@@ -60,6 +60,9 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
+      telnyx:
+        specifier: ^7.21.0
+        version: 7.21.0
       twilio:
         specifier: ^6.1.1
         version: 6.1.1(debug@4.4.3)
@@ -1798,6 +1801,14 @@ packages:
       babel-plugin-macros:
         optional: true
 
+  telnyx@7.21.0:
+    resolution: {integrity: sha512-qRzvhFnkdYH+ijbQNIgMLYGhHfH7T+1CSMuSNaIcXy8nprEwaJ35XK+2Hg8lTkJWKbsYzY46wbXwLgNlC4qWww==}
+    peerDependencies:
+      ws: ^8.18.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+
   tinybench@6.1.4:
     resolution: {integrity: sha512-9APumHG7r4yOk4X4WlkmE71aZcv1gvin1czO3OQ1U9iJcFA5Ja/ygyb0vPOVHTthFozUYs8CLoLUlM8grb2lTQ==}
     engines: {node: '>=20.0.0'}
@@ -3520,6 +3531,8 @@ snapshots:
     dependencies:
       client-only: 0.0.1
       react: 19.2.8
+
+  telnyx@7.21.0: {}
 
   tinybench@6.1.4: {}
 
