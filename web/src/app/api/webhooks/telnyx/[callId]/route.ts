@@ -66,8 +66,9 @@ async function speak(
       voice: VOICE,
       client_state: encodeState(state),
     })
-    .catch(() => {
+    .catch((error) => {
       // The call may already be over; nothing left to say.
+      console.error(`speak failed for ${callControlId}:`, error);
     });
 }
 
@@ -160,9 +161,10 @@ async function handleSpeakEnded(
   if (state === PROMPT_STATE) {
     await client()
       .calls.actions.startTranscription(callControlId, {})
-      .catch(() => {
+      .catch((error) => {
         // The call may already be over; the no-input timeout below will
         // find the record already resolved and no-op.
+        console.error(`startTranscription failed for ${callControlId}:`, error);
       });
     await waitForAnswer(callId, callControlId);
     return;
@@ -171,8 +173,9 @@ async function handleSpeakEnded(
   if (state === GOODBYE_STATE) {
     await client()
       .calls.actions.hangup(callControlId, {})
-      .catch(() => {
+      .catch((error) => {
         // The call may already be over on Telnyx's side either way.
+        console.error(`hangup failed for ${callControlId}:`, error);
       });
   }
 }
@@ -195,7 +198,9 @@ async function waitForAnswer(
 
   await client()
     .calls.actions.stopTranscription(callControlId, {})
-    .catch(() => {});
+    .catch((error) => {
+      console.error(`stopTranscription failed for ${callControlId}:`, error);
+    });
   await speak(
     callControlId,
     "Sorry, I didn't catch that. Goodbye.",
@@ -219,7 +224,9 @@ async function handleTranscription(
 
   await client()
     .calls.actions.stopTranscription(callControlId, {})
-    .catch(() => {});
+    .catch((error) => {
+      console.error(`stopTranscription failed for ${callControlId}:`, error);
+    });
   await speak(callControlId, "Got it, thanks. Goodbye.", GOODBYE_STATE);
 }
 
