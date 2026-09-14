@@ -112,8 +112,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
 
     expect(speak).toHaveBeenCalledWith("cc-1", {
       payload: "Deploy now? Context: Staging is green.",
-      voice: "female",
-      service_level: "basic",
+      voice: "Telnyx.KokoroTTS.af_heart",
       language: "en-US",
       client_state: promptState(),
     });
@@ -126,8 +125,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
 
     expect(speak).toHaveBeenCalledWith("cc-1", {
       payload: "Sorry, this call is no longer valid. Goodbye.",
-      voice: "female",
-      service_level: "basic",
+      voice: "Telnyx.KokoroTTS.af_heart",
       language: "en-US",
       client_state: goodbyeState(),
     });
@@ -185,8 +183,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
     expect(stopTranscription).toHaveBeenCalledWith("cc-1", {});
     expect(speak).toHaveBeenCalledWith("cc-1", {
       payload: "Sorry, I didn't catch that. Goodbye.",
-      voice: "female",
-      service_level: "basic",
+      voice: "Telnyx.KokoroTTS.af_heart",
       language: "en-US",
       client_state: goodbyeState(),
     });
@@ -233,8 +230,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
     expect(stopTranscription).toHaveBeenCalledWith("cc-1", {});
     expect(speak).toHaveBeenCalledWith("cc-1", {
       payload: "Got it, thanks. Goodbye.",
-      voice: "female",
-      service_level: "basic",
+      voice: "Telnyx.KokoroTTS.af_heart",
       language: "en-US",
       client_state: goodbyeState(),
     });
