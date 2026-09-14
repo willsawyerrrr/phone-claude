@@ -21,6 +21,18 @@ const NO_INPUT_TIMEOUT_MS = 8_000;
 const PROMPT_STATE = "prompt";
 const GOODBYE_STATE = "goodbye";
 
+// Caps how many times a caller can ask to hear the question again, so a
+// speech-recognition misfire that keeps matching REPEAT_PATTERN can't loop
+// the call forever.
+const MAX_REPEATS = 3;
+
+// Heuristic match for "please repeat that" rather than an actual answer.
+// This app's questions are short and answer-oriented (yes/no, a pick from a
+// few options), so a real answer containing these words is unlikely enough
+// that a plain keyword match is good enough without real NLU.
+const REPEAT_PATTERN =
+  /\b(repeat|again|come again|one more time|say (that|it) once more|what was that|didn'?t (catch|hear|get) that|pardon)\b/i;
+
 interface TelnyxWebhookEvent {
   data?: {
     event_type?: string;
@@ -82,11 +94,13 @@ async function speak(
  * speaks the question (and context, if any); once that finishes
  * (`call.speak.ended`), starts real-time transcription and waits up to
  * `NO_INPUT_TIMEOUT_MS` for a final transcript. A `call.transcription`
- * event with a final result marks the `CallRecord` `answered`; either
- * outcome speaks a closing message tagged `GOODBYE_STATE`, and the
- * `call.speak.ended` for that message hangs up. A `call.hangup` marks the
- * record `failed` if it's still `pending` — the call ended without a
- * spoken answer.
+ * event with a final result that looks like a request to repeat the
+ * question (`REPEAT_PATTERN`, up to `MAX_REPEATS` times) speaks it again
+ * instead of recording it as the answer; any other final result marks the
+ * `CallRecord` `answered`. Either outcome speaks a closing message tagged
+ * `GOODBYE_STATE`, and the `call.speak.ended` for that message hangs up. A
+ * `call.hangup` marks the record `failed` if it's still `pending` — the
+ * call ended without a spoken answer.
  */
 export async function POST(
   request: NextRequest,
@@ -138,6 +152,12 @@ export async function POST(
   return NextResponse.json({ ok: true });
 }
 
+function buildPrompt(record: { question: string; context?: string }): string {
+  return record.context
+    ? `${record.question} Context: ${record.context}`
+    : record.question;
+}
+
 async function handleAnswered(
   callId: string,
   callControlId: string,
@@ -152,10 +172,7 @@ async function handleAnswered(
     return;
   }
 
-  const prompt = record.context
-    ? `${record.question} Context: ${record.context}`
-    : record.question;
-  await speak(callControlId, prompt, PROMPT_STATE);
+  await speak(callControlId, buildPrompt(record), PROMPT_STATE);
 }
 
 async function handleSpeakEnded(
@@ -164,6 +181,9 @@ async function handleSpeakEnded(
   state: string | undefined,
 ): Promise<void> {
   if (state === PROMPT_STATE) {
+    const record = await CallStore.get(callId);
+    if (!record || record.status !== "pending") return;
+
     await client()
       .calls.actions.startTranscription(callControlId, {})
       .catch((error) => {
@@ -171,7 +191,7 @@ async function handleSpeakEnded(
         // find the record already resolved and no-op.
         console.error(`startTranscription failed for ${callControlId}:`, error);
       });
-    await waitForAnswer(callId, callControlId);
+    await waitForAnswer(callId, callControlId, record.promptAttempt ?? 1);
     return;
   }
 
@@ -188,8 +208,17 @@ async function handleSpeakEnded(
 async function waitForAnswer(
   callId: string,
   callControlId: string,
+  attempt: number,
 ): Promise<void> {
   await sleep(NO_INPUT_TIMEOUT_MS);
+
+  const record = await CallStore.get(callId);
+  if (!record || record.status !== "pending") return;
+  if ((record.promptAttempt ?? 1) !== attempt) {
+    // A repeat request started a fresh prompt/listen cycle since this timer
+    // was scheduled; that cycle's own timer owns deciding when to give up.
+    return;
+  }
 
   const updated = await CallStore.update(
     callId,
@@ -219,6 +248,34 @@ async function handleTranscription(
   transcriptionData: { is_final?: boolean; transcript?: string } | undefined,
 ): Promise<void> {
   if (!transcriptionData?.is_final || !transcriptionData.transcript) return;
+
+  const record = await CallStore.get(callId);
+  if (!record || record.status !== "pending") return;
+
+  const attempt = record.promptAttempt ?? 1;
+  if (
+    REPEAT_PATTERN.test(transcriptionData.transcript) &&
+    attempt < MAX_REPEATS
+  ) {
+    await client()
+      .calls.actions.stopTranscription(callControlId, {})
+      .catch((error) => {
+        console.error(`stopTranscription failed for ${callControlId}:`, error);
+      });
+    const updated = await CallStore.update(
+      callId,
+      { promptAttempt: attempt + 1 },
+      { ifStatus: "pending" },
+    );
+    if (!updated) return; // The no-input timeout already resolved the call.
+
+    await speak(
+      callControlId,
+      `One more time. ${buildPrompt(record)}`,
+      PROMPT_STATE,
+    );
+    return;
+  }
 
   const updated = await CallStore.update(
     callId,
