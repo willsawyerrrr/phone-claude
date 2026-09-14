@@ -5,14 +5,20 @@ import { verifyTelnyxSignature } from "@/lib/verify-telnyx-signature";
 
 // Long enough to cover the no-input timeout below plus normal command
 // round-trips.
-export const maxDuration = 15;
+export const maxDuration = 25;
 
 // Telnyx's own neural voice, chosen by ear over Amazon Polly and Azure
 // neural voices on a live test call — sounded the most natural of the
 // options available without a separate ElevenLabs account.
 const VOICE = "Telnyx.KokoroTTS.af_heart";
 const LANGUAGE = "en-US";
-const NO_INPUT_TIMEOUT_MS = 8_000;
+
+// Real-time transcription doesn't finalize the instant the caller stops
+// talking — on a live call, a short reply took ~11s from the prompt ending
+// to the final transcript arriving. 8s was cutting that off: the timeout
+// fired, ended the call with an apology, and the real transcript arrived a
+// few seconds later to a call that had already ended.
+const NO_INPUT_TIMEOUT_MS = 15_000;
 
 // Tags on the `speak` commands this route issues, echoed back on the
 // corresponding `call.speak.ended` webhook via `client_state`, so that
@@ -247,16 +253,22 @@ async function handleTranscription(
   callControlId: string,
   transcriptionData: { is_final?: boolean; transcript?: string } | undefined,
 ): Promise<void> {
+  console.log(
+    `call.transcription for ${callId}: ${JSON.stringify(transcriptionData)}`,
+  );
   if (!transcriptionData?.is_final || !transcriptionData.transcript) return;
 
   const record = await CallStore.get(callId);
   if (!record || record.status !== "pending") return;
 
   const attempt = record.promptAttempt ?? 1;
-  if (
-    REPEAT_PATTERN.test(transcriptionData.transcript) &&
-    attempt < MAX_REPEATS
-  ) {
+  const isRepeatRequest =
+    REPEAT_PATTERN.test(transcriptionData.transcript) && attempt < MAX_REPEATS;
+  console.log(
+    `transcription for ${callId} (attempt ${attempt}): ${JSON.stringify(transcriptionData.transcript)} -> ${isRepeatRequest ? "repeat" : "answer"}`,
+  );
+
+  if (isRepeatRequest) {
     await client()
       .calls.actions.stopTranscription(callControlId, {})
       .catch((error) => {
