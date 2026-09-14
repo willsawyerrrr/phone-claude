@@ -12,6 +12,13 @@ export interface CallRecord {
   error?: string;
   providerCallId?: string;
   createdAt: string;
+  /**
+   * How many times the question has been spoken (starts at 1). Telnyx's
+   * webhook route bumps this when the caller asks to hear it again, and
+   * uses it to tell a stale no-input timeout — started before the repeat —
+   * apart from the current one.
+   */
+  promptAttempt?: number;
 }
 
 const TTL_SECONDS = 60 * 60;

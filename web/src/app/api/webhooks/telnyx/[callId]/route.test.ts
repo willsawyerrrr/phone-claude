@@ -133,6 +133,14 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
 
   it("starts transcription once the question finishes playing", async () => {
     vi.useFakeTimers();
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      promptAttempt: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
     vi.mocked(CallStore.update).mockResolvedValue(null);
 
     const post = POST(
@@ -156,6 +164,14 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
 
   it("marks the call failed and apologises if nothing is said in time", async () => {
     vi.useFakeTimers();
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      promptAttempt: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
     vi.mocked(CallStore.update).mockResolvedValue({
       callId: "call-1",
       phoneNumber: "+10000000000",
@@ -191,6 +207,14 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
 
   it("does not apologise if an answer already arrived before the timeout", async () => {
     vi.useFakeTimers();
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      promptAttempt: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
     vi.mocked(CallStore.update).mockResolvedValue(null);
 
     const post = POST(
@@ -204,6 +228,14 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
   });
 
   it("records a final transcript as the answer and speaks a closing message", async () => {
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      promptAttempt: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
     vi.mocked(CallStore.update).mockResolvedValue({
       callId: "call-1",
       phoneNumber: "+10000000000",
@@ -234,6 +266,117 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       language: "en-US",
       client_state: goodbyeState(),
     });
+  });
+
+  it("repeats the question when the caller asks, without recording it as the answer", async () => {
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      context: "Staging is green.",
+      status: "pending",
+      promptAttempt: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    vi.mocked(CallStore.update).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      context: "Staging is green.",
+      status: "pending",
+      promptAttempt: 2,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    await POST(
+      request(
+        event("call.transcription", {
+          transcription_data: {
+            is_final: true,
+            transcript: "Can you repeat that?",
+          },
+        }),
+      ),
+      params(),
+    );
+
+    expect(stopTranscription).toHaveBeenCalledWith("cc-1", {});
+    expect(CallStore.update).toHaveBeenCalledWith(
+      "call-1",
+      { promptAttempt: 2 },
+      { ifStatus: "pending" },
+    );
+    expect(speak).toHaveBeenCalledWith("cc-1", {
+      payload: "One more time. Deploy now? Context: Staging is green.",
+      voice: "Telnyx.KokoroTTS.af_heart",
+      language: "en-US",
+      client_state: promptState(),
+    });
+  });
+
+  it("stops repeating once the limit is reached and records it as the answer instead", async () => {
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      promptAttempt: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    vi.mocked(CallStore.update).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "answered",
+      answer: "repeat please",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    await POST(
+      request(
+        event("call.transcription", {
+          transcription_data: { is_final: true, transcript: "repeat please" },
+        }),
+      ),
+      params(),
+    );
+
+    expect(CallStore.update).toHaveBeenCalledWith(
+      "call-1",
+      { status: "answered", answer: "repeat please" },
+      { ifStatus: "pending" },
+    );
+  });
+
+  it("ignores a stale no-input timeout after a repeat starts a new listening window", async () => {
+    vi.useFakeTimers();
+    vi.mocked(CallStore.get)
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 2,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+
+    const post = POST(
+      request(event("call.speak.ended", { client_state: promptState() })),
+      params(),
+    );
+    await vi.advanceTimersByTimeAsync(8_000);
+    await post;
+
+    expect(CallStore.update).not.toHaveBeenCalled();
+    expect(speak).not.toHaveBeenCalled();
   });
 
   it("ignores an interim (non-final) transcription result", async () => {
