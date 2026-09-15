@@ -41,7 +41,7 @@ export async function GET(
   }
 
   const prompt = record.context
-    ? `${record.question} Context: ${record.context}`
+    ? `Context: ${record.context} ${record.question}`
     : record.question;
 
   const gather = response.gather({
