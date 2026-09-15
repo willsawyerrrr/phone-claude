@@ -19,6 +19,20 @@ export interface CallRecord {
    * apart from the current one.
    */
   promptAttempt?: number;
+  /**
+   * The caller's reply so far for the current promptAttempt, accumulated
+   * across Telnyx transcription segments — `is_final: true` on a segment
+   * means that piece of text is stable, not that the caller has finished
+   * speaking. Cleared when a new promptAttempt starts.
+   */
+  pendingTranscript?: string;
+  /**
+   * Bumped on every transcription segment accumulated into
+   * `pendingTranscript`. Lets a segment's own "finalize after a quiet
+   * period" timer tell whether a later segment has since arrived — if so,
+   * that later segment's timer owns finalizing instead.
+   */
+  transcriptSeq?: number;
 }
 
 const TTL_SECONDS = 60 * 60;

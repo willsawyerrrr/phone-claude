@@ -259,15 +259,28 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
     expect(speak).not.toHaveBeenCalled();
   });
 
-  it("records a final transcript as the answer and speaks a closing message", async () => {
-    vi.mocked(CallStore.get).mockResolvedValue({
-      callId: "call-1",
-      phoneNumber: "+10000000000",
-      question: "Deploy now?",
-      status: "pending",
-      promptAttempt: 1,
-      createdAt: "2026-01-01T00:00:00.000Z",
-    });
+  it("buffers a transcript segment and finalizes it as the answer after the quiet period", async () => {
+    vi.useFakeTimers();
+    vi.mocked(CallStore.get)
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 1,
+        transcriptSeq: 0,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 1,
+        pendingTranscript: "Ship it",
+        transcriptSeq: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
     vi.mocked(CallStore.update).mockResolvedValue({
       callId: "call-1",
       phoneNumber: "+10000000000",
@@ -277,7 +290,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
     });
 
-    await POST(
+    const post = POST(
       request(
         event("call.transcription", {
           transcription_data: { is_final: true, transcript: "Ship it" },
@@ -285,7 +298,14 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       ),
       params(),
     );
+    await vi.advanceTimersByTimeAsync(3_000);
+    await post;
 
+    expect(CallStore.update).toHaveBeenCalledWith(
+      "call-1",
+      { pendingTranscript: "Ship it", transcriptSeq: 1 },
+      { ifStatus: "pending" },
+    );
     expect(CallStore.update).toHaveBeenCalledWith(
       "call-1",
       { status: "answered", answer: "Ship it" },
@@ -300,16 +320,127 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
     });
   });
 
-  it("repeats the question when the caller asks, without recording it as the answer", async () => {
-    vi.mocked(CallStore.get).mockResolvedValue({
+  it("joins consecutive segments into one reply instead of acting on the first alone", async () => {
+    vi.useFakeTimers();
+    vi.mocked(CallStore.get)
+      // handleTranscription reading the record for "sorry"
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 1,
+        transcriptSeq: 0,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+      // handleTranscription reading the record for "can you repeat that",
+      // arriving before "sorry"'s quiet period elapses
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 1,
+        pendingTranscript: "sorry",
+        transcriptSeq: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+      // "sorry"'s own finalize call, after the full record now reflects seq 2
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 1,
+        pendingTranscript: "sorry can you repeat that",
+        transcriptSeq: 2,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+      // "can you repeat that"'s own finalize call
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        context: "Staging is green.",
+        status: "pending",
+        promptAttempt: 1,
+        pendingTranscript: "sorry can you repeat that",
+        transcriptSeq: 2,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+    vi.mocked(CallStore.update).mockResolvedValue({
       callId: "call-1",
       phoneNumber: "+10000000000",
       question: "Deploy now?",
-      context: "Staging is green.",
       status: "pending",
-      promptAttempt: 1,
+      promptAttempt: 2,
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
+    const first = POST(
+      request(
+        event("call.transcription", {
+          transcription_data: { is_final: true, transcript: "sorry" },
+        }),
+      ),
+      params(),
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    await first;
+
+    const second = POST(
+      request(
+        event("call.transcription", {
+          transcription_data: {
+            is_final: true,
+            transcript: "can you repeat that",
+          },
+        }),
+      ),
+      params(),
+    );
+    await vi.advanceTimersByTimeAsync(3_000);
+    await second;
+
+    // The first segment's own finalize fired in that 3s advance too, but
+    // found transcriptSeq had moved on and skipped it — only the combined
+    // text is ever classified.
+    expect(speak).toHaveBeenCalledWith("cc-1", {
+      payload: "One more time. Deploy now? Context: Staging is green.",
+      voice: "Telnyx.KokoroTTS.af_heart",
+      language: "en-US",
+      client_state: promptState(),
+    });
+    expect(speak).not.toHaveBeenCalledWith(
+      "cc-1",
+      expect.objectContaining({ payload: expect.stringContaining("sorry") }),
+    );
+  });
+
+  it("repeats the question when the caller asks, without recording it as the answer", async () => {
+    vi.useFakeTimers();
+    vi.mocked(CallStore.get)
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        context: "Staging is green.",
+        status: "pending",
+        promptAttempt: 1,
+        transcriptSeq: 0,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        context: "Staging is green.",
+        status: "pending",
+        promptAttempt: 1,
+        pendingTranscript: "Can you repeat that?",
+        transcriptSeq: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
     vi.mocked(CallStore.update).mockResolvedValue({
       callId: "call-1",
       phoneNumber: "+10000000000",
@@ -320,7 +451,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
     });
 
-    await POST(
+    const post = POST(
       request(
         event("call.transcription", {
           transcription_data: {
@@ -331,11 +462,17 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       ),
       params(),
     );
+    await vi.advanceTimersByTimeAsync(3_000);
+    await post;
 
     expect(stopTranscription).not.toHaveBeenCalled();
     expect(CallStore.update).toHaveBeenCalledWith(
       "call-1",
-      { promptAttempt: 2 },
+      {
+        promptAttempt: 2,
+        pendingTranscript: undefined,
+        transcriptSeq: 0,
+      },
       { ifStatus: "pending" },
     );
     expect(speak).toHaveBeenCalledWith("cc-1", {
@@ -347,14 +484,27 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
   });
 
   it("stops repeating once the limit is reached and records it as the answer instead", async () => {
-    vi.mocked(CallStore.get).mockResolvedValue({
-      callId: "call-1",
-      phoneNumber: "+10000000000",
-      question: "Deploy now?",
-      status: "pending",
-      promptAttempt: 3,
-      createdAt: "2026-01-01T00:00:00.000Z",
-    });
+    vi.useFakeTimers();
+    vi.mocked(CallStore.get)
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 3,
+        transcriptSeq: 0,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        callId: "call-1",
+        phoneNumber: "+10000000000",
+        question: "Deploy now?",
+        status: "pending",
+        promptAttempt: 3,
+        pendingTranscript: "repeat please",
+        transcriptSeq: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
     vi.mocked(CallStore.update).mockResolvedValue({
       callId: "call-1",
       phoneNumber: "+10000000000",
@@ -364,7 +514,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
     });
 
-    await POST(
+    const post = POST(
       request(
         event("call.transcription", {
           transcription_data: { is_final: true, transcript: "repeat please" },
@@ -372,12 +522,38 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       ),
       params(),
     );
+    await vi.advanceTimersByTimeAsync(3_000);
+    await post;
 
     expect(CallStore.update).toHaveBeenCalledWith(
       "call-1",
       { status: "answered", answer: "repeat please" },
       { ifStatus: "pending" },
     );
+  });
+
+  it("does not apologise once the caller has started replying, even before it's finalized", async () => {
+    vi.useFakeTimers();
+    vi.mocked(CallStore.get).mockResolvedValue({
+      callId: "call-1",
+      phoneNumber: "+10000000000",
+      question: "Deploy now?",
+      status: "pending",
+      promptAttempt: 1,
+      transcriptSeq: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    vi.mocked(CallStore.update).mockResolvedValue(null);
+
+    const post = POST(
+      request(event("call.speak.ended", { client_state: promptState() })),
+      params(),
+    );
+    await vi.advanceTimersByTimeAsync(15_000);
+    await post;
+
+    expect(CallStore.update).not.toHaveBeenCalled();
+    expect(speak).not.toHaveBeenCalled();
   });
 
   it("ignores a stale no-input timeout after a repeat starts a new listening window", async () => {

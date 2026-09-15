@@ -13,12 +13,17 @@ export const maxDuration = 25;
 const VOICE = "Telnyx.KokoroTTS.af_heart";
 const LANGUAGE = "en-US";
 
-// Real-time transcription doesn't finalize the instant the caller stops
-// talking — on a live call, a short reply took ~11s from the prompt ending
-// to the final transcript arriving. 8s was cutting that off: the timeout
-// fired, ended the call with an apology, and the real transcript arrived a
-// few seconds later to a call that had already ended.
+// How long to wait for the caller to say anything at all before giving up.
 const NO_INPUT_TIMEOUT_MS = 15_000;
+
+// A transcription segment's `is_final: true` means that piece of text is
+// stable, not that the caller has finished their reply — a longer answer
+// arrives as several final segments in a row (confirmed on a live call: a
+// caller saying "sorry, can you repeat that?" arrived as two segments,
+// "sorry" then "can you repeat that", and the first was wrongly recorded as
+// the whole answer). Segments are accumulated, and only treated as the
+// caller's complete reply once this long passes with no further segment.
+const QUIET_PERIOD_MS = 3_000;
 
 // Tags on the `speak` commands this route issues, echoed back on the
 // corresponding `call.speak.ended` webhook via `client_state`, so that
@@ -99,11 +104,14 @@ async function speak(
  * Receives every Telnyx Call Control webhook for a call. On `call.answered`,
  * speaks the question (and context, if any); once that finishes
  * (`call.speak.ended`), starts real-time transcription and waits up to
- * `NO_INPUT_TIMEOUT_MS` for a final transcript. A `call.transcription`
- * event with a final result that looks like a request to repeat the
- * question (`REPEAT_PATTERN`, up to `MAX_REPEATS` times) speaks it again
- * instead of recording it as the answer; any other final result marks the
- * `CallRecord` `answered`. Either outcome speaks a closing message tagged
+ * `NO_INPUT_TIMEOUT_MS` for the caller to say anything at all. Each
+ * `call.transcription` segment is accumulated onto the `CallRecord`
+ * (`pendingTranscript`); once `QUIET_PERIOD_MS` passes with no further
+ * segment, the accumulated text is treated as the caller's complete reply.
+ * A reply that looks like a request to repeat the question
+ * (`REPEAT_PATTERN`, up to `MAX_REPEATS` times) speaks it again instead of
+ * recording it as the answer; any other reply marks the `CallRecord`
+ * `answered`. Either outcome speaks a closing message tagged
  * `GOODBYE_STATE`, and the `call.speak.ended` for that message hangs up. A
  * `call.hangup` marks the record `failed` if it's still `pending` — the
  * call ended without a spoken answer.
@@ -242,6 +250,11 @@ async function waitForAnswer(
     // was scheduled; that cycle's own timer owns deciding when to give up.
     return;
   }
+  if ((record.transcriptSeq ?? 0) > 0) {
+    // The caller has started replying; that segment's own quiet-period
+    // timer (see handleTranscription) owns deciding when they're done.
+    return;
+  }
 
   const updated = await CallStore.update(
     callId,
@@ -278,11 +291,47 @@ async function handleTranscription(
   const record = await CallStore.get(callId);
   if (!record || record.status !== "pending") return;
 
+  const pendingTranscript = [
+    record.pendingTranscript,
+    transcriptionData.transcript,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
+  const transcriptSeq = (record.transcriptSeq ?? 0) + 1;
+
+  const updated = await CallStore.update(
+    callId,
+    { pendingTranscript, transcriptSeq },
+    { ifStatus: "pending" },
+  );
+  if (!updated) return; // The no-input timeout already resolved the call.
+
+  // Scheduled to run after this webhook's response is sent (see the
+  // comment on handleSpeakEnded's equivalent) rather than blocking on it.
+  after(() => finalizeTranscript(callId, callControlId, transcriptSeq));
+}
+
+async function finalizeTranscript(
+  callId: string,
+  callControlId: string,
+  seq: number,
+): Promise<void> {
+  await sleep(QUIET_PERIOD_MS);
+
+  const record = await CallStore.get(callId);
+  if (!record || record.status !== "pending") return;
+  if ((record.transcriptSeq ?? 0) !== seq) {
+    // A later segment arrived since this timer was scheduled; that
+    // segment's own timer owns finalizing instead.
+    return;
+  }
+
+  const transcript = record.pendingTranscript ?? "";
   const attempt = record.promptAttempt ?? 1;
   const isRepeatRequest =
-    REPEAT_PATTERN.test(transcriptionData.transcript) && attempt < MAX_REPEATS;
+    REPEAT_PATTERN.test(transcript) && attempt < MAX_REPEATS;
   console.log(
-    `transcription for ${callId} (attempt ${attempt}): ${JSON.stringify(transcriptionData.transcript)} -> ${isRepeatRequest ? "repeat" : "answer"}`,
+    `finalized transcript for ${callId} (attempt ${attempt}): ${JSON.stringify(transcript)} -> ${isRepeatRequest ? "repeat" : "answer"}`,
   );
 
   if (isRepeatRequest) {
@@ -291,12 +340,16 @@ async function handleTranscription(
     // before the previous session has finished tearing down ("already in
     // progress"), which left a prior version of this route listening on a
     // session that had actually failed to (re)start.
-    const updated = await CallStore.update(
+    const bumped = await CallStore.update(
       callId,
-      { promptAttempt: attempt + 1 },
+      {
+        promptAttempt: attempt + 1,
+        pendingTranscript: undefined,
+        transcriptSeq: 0,
+      },
       { ifStatus: "pending" },
     );
-    if (!updated) return; // The no-input timeout already resolved the call.
+    if (!bumped) return; // The no-input timeout already resolved the call.
 
     await speak(
       callControlId,
@@ -306,12 +359,12 @@ async function handleTranscription(
     return;
   }
 
-  const updated = await CallStore.update(
+  const finalized = await CallStore.update(
     callId,
-    { status: "answered", answer: transcriptionData.transcript },
+    { status: "answered", answer: transcript },
     { ifStatus: "pending" },
   );
-  if (!updated) return; // The no-input timeout already resolved the call.
+  if (!finalized) return; // The no-input timeout already resolved the call.
 
   await client()
     .calls.actions.stopTranscription(callControlId, {})

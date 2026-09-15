@@ -32,18 +32,27 @@ pnpm workspace with two packages:
      as the call progresses; there's no TwiML-fetch equivalent, so that one
      route drives the whole call. On `call.answered` it issues a `speak`
      Call Control command with the question (and context); once that
-     finishes (`call.speak.ended`) it issues `transcription_start` and
-     waits for a final result on a `call.transcription` event. If that
-     result looks like a request to hear the question again (a keyword
+     finishes (`call.speak.ended`) it issues `transcription_start`. A
+     `call.transcription` event's `is_final: true` means only that segment
+     of text is stable, not that the caller has finished talking — a reply
+     often arrives as several final segments in a row — so segments are
+     accumulated onto the `CallRecord` (`pendingTranscript`), and only
+     once a short quiet period passes with no further segment is the
+     accumulated text treated as the caller's complete reply. If that
+     reply looks like a request to hear the question again (a keyword
      match, up to a small repeat limit — useful when the caller is
      somewhere noisy, like mid-run), it speaks the question again instead
      of recording it as the answer; otherwise it updates the `CallRecord`
-     to `answered`. The `CallRecord`'s `promptAttempt` field lets a
-     no-input timeout tell whether a repeat has since started a fresh
-     listening window, so a stale timeout from before the repeat can't
-     wrongly end the call. If nothing is said within the no-input timeout,
-     or the call ends first (`call.hangup`) while the record is still
-     `pending`, the route marks it `failed`.
+     to `answered`. The `CallRecord`'s `promptAttempt` and `transcriptSeq`
+     fields let a stale no-input or quiet-period timer — scheduled before
+     a repeat, or before a later segment arrived — tell that a newer one
+     has since taken over, and no-op instead of wrongly ending the call or
+     acting on stale text. Both timers run via `after()` rather than
+     blocking the webhook response, since Telnyx's webhook delivery has
+     its own timeout and a slow response risked it retrying the same
+     event. If nothing is ever said, or the call ends first
+     (`call.hangup`) while the record is still `pending`, the route marks
+     it `failed`.
 5. The next poll from `mcp-server` observes the terminal status and returns
    the answer (or a clear failure message) as the tool result.
 6. If the poll times out, or the `mcp-server` process is interrupted
