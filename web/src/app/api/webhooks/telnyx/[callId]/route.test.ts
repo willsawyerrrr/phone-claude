@@ -121,7 +121,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
     await POST(request(event("call.answered", {})), params());
 
     expect(speak).toHaveBeenCalledWith("cc-1", {
-      payload: "Deploy now? Context: Staging is green.",
+      payload: "Context: Staging is green. Deploy now?",
       voice: "Telnyx.KokoroTTS.af_heart",
       language: "en-US",
       client_state: promptState(),
@@ -406,7 +406,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
     // found transcriptSeq had moved on and skipped it — only the combined
     // text is ever classified.
     expect(speak).toHaveBeenCalledWith("cc-1", {
-      payload: "One more time. Deploy now? Context: Staging is green.",
+      payload: "One more time. Context: Staging is green. Deploy now?",
       voice: "Telnyx.KokoroTTS.af_heart",
       language: "en-US",
       client_state: promptState(),
@@ -476,7 +476,7 @@ describe("POST /api/webhooks/telnyx/:callId", () => {
       { ifStatus: "pending" },
     );
     expect(speak).toHaveBeenCalledWith("cc-1", {
-      payload: "One more time. Deploy now? Context: Staging is green.",
+      payload: "One more time. Context: Staging is green. Deploy now?",
       voice: "Telnyx.KokoroTTS.af_heart",
       language: "en-US",
       client_state: promptState(),

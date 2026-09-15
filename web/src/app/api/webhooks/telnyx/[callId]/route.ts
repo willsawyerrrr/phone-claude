@@ -168,7 +168,7 @@ export async function POST(
 
 function buildPrompt(record: { question: string; context?: string }): string {
   return record.context
-    ? `${record.question} Context: ${record.context}`
+    ? `Context: ${record.context} ${record.question}`
     : record.question;
 }
 
