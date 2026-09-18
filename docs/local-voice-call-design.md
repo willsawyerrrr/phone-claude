@@ -200,8 +200,15 @@ call-in-progress state, and graceful hangup once an answer is captured.
    local LLM stage is required at all.
 
    > Answered by the current codebase: it's single question → single
-   > answer, with no LLM in the loop today on either provider. Absent a
-   > new requirement to add follow-up dialogue, skip the LLM stage.
+   > answer, with no LLM in the loop today on either provider.
+   >
+   > **Decided:** skip the LLM stage for v1, matching current behavior.
+   > Multi-turn dialogue is a good extension, but it's follow-on work —
+   > not blocking, and not being designed in now. When it's picked up,
+   > the local stack's VAD → STT boundary is the natural point to insert
+   > it (feed the transcribed reply to a local LLM before deciding
+   > whether to speak again or return the final answer), so nothing about
+   > the v1 pipeline needs to be built to anticipate it.
 
 2. Hardware target: what machine will run Asterisk + the voice pipeline?
    (Determines model size choices — e.g. Parakeet vs. whisper.cpp, Kokoro
@@ -210,11 +217,49 @@ call-in-progress state, and graceful hangup once an answer is captured.
    > Not something the current repo has an answer for — there's no
    > existing "always-on local machine" in this project today (`web`
    > runs on Vercel, `mcp-server` runs wherever Claude Code runs, which
-   > may not be an always-on box). This needs an answer from Will before
-   > sizing models — an always-on home machine to host Asterisk and the
-   > voice pipeline is new infrastructure this design requires.
+   > may not be an always-on box). The actual machine is still
+   > unconfirmed, but there's now a firm packaging requirement either
+   > way: **the Asterisk PBX and the voice pipeline should ship as a
+   > single deployable unit** — a Docker Compose stack (one `asterisk`
+   > service, one `voice-pipeline` service for the AudioSocket/VAD/STT/TTS
+   > Python process, sharing a Docker network) rather than a hand-assembled
+   > set of separately-installed services. `mcp-server` stays outside
+   > that stack as the plain local Node process Claude Code spawns via
+   > stdio (an MCP stdio server can't itself be "a container" Claude Code
+   > `docker run`s), and talks to the compose stack over `localhost`
+   > ports. This doesn't remove the need to pick a machine to run the
+   > stack on — it just means whatever that machine is, standing the
+   > whole thing up is `docker compose up`, not per-service installs.
 
-3. Soft-phone app choice for Will's phone (Linphone vs. alternatives).
+3. Soft-phone app choice for Will's phone.
+
+   > A few concrete options, roughly in order of what's likely the best
+   > fit here:
+   > - **[Groundwire](https://www.acrobits.net/groundwire/)** (Acrobits;
+   >   iOS + Android, paid) — built specifically around reliable
+   >   CallKit/PushKit integration, so incoming calls still ring properly
+   >   when the app is backgrounded or the phone is locked, which matters
+   >   for a tool meant to reach Will when he isn't actively holding the
+   >   phone. Generally considered one of the more dependable third-party
+   >   softphones for exactly this reason.
+   > - **[Linphone](https://linphone.org/)** (free, open source, iOS +
+   >   Android) — the original doc's own suggestion, and a fine default:
+   >   actively maintained, no cost, works with a plain PJSIP
+   >   registration. Its background/push reliability on iOS is weaker
+   >   than Groundwire's out of the box (it needs Linphone's own push
+   >   relay or a self-hosted `flexisip-pushd` to wake the app for calls
+   >   when it's not foregrounded) — worth a real test on Will's actual
+   >   phone/lock-screen habits before committing to it.
+   > - **[Zoiper](https://www.zoiper.com/)** (free tier + paid Zoiper5;
+   >   iOS + Android) — widely used, straightforward PJSIP setup, push
+   >   notification support in the paid tier. A reasonable middle ground
+   >   between Linphone's simplicity and Groundwire's polish.
+   >
+   > The common thread: whichever is picked, **verify it can actually
+   > wake and ring when backgrounded/locked**, not just when the app is
+   > open in the foreground — that's the realistic condition this tool
+   > needs to work under, and it's exactly what plain SIP registration
+   > without a proper push setup tends to get wrong on iOS in particular.
 
 4. Off-network reachability: is VPN bridging (Tailscale/WireGuard) in
    scope for v1, or LAN-only for now?
@@ -269,9 +314,27 @@ already depends on and should stay put.
 (`startCall`, `pollForAnswer`, `cancelCall`) currently do their work via
 `fetch` calls to `web`. They get reimplemented against the local stack
 instead:
-- `startCall` → originate the call via Asterisk's AMI or ARI (pick one;
-  ARI's REST/WebSocket model maps more naturally onto a Node client than
-  AMI's line-based protocol) instead of `POST /api/calls`.
+- `startCall` → originate the call via Asterisk's AMI or ARI instead of
+  `POST /api/calls`. Both are Asterisk's own control interfaces, not
+  anything specific to this project:
+  - **AMI (Asterisk Manager Interface)** — the older interface: a
+    persistent raw TCP socket carrying a simple text/line protocol
+    (think: telnet-style request/response plus a stream of async event
+    lines), used mainly for administrative actions and monitoring
+    (originate a call, hang up, watch channel state change).
+  - **ARI (Asterisk REST Interface)** — the newer interface: ordinary
+    REST calls for actions plus a WebSocket for events, built around
+    handing a call to a "Stasis" application you write, which then gets
+    full programmatic control over that call's lifecycle.
+  - For this project, ARI is the more natural fit for a Node client —
+    REST + WebSocket is a normal shape to build a TypeScript client
+    against, versus parsing AMI's line protocol by hand (or pulling in
+    a less common AMI client library). Either way, note their job here
+    is narrow: just originating the call into the dedicated dialplan
+    extension and hanging it up on cancel. The actual audio handling
+    (speaking the question, capturing the reply) happens over
+    AudioSocket, wired up entirely in Asterisk's dialplan
+    (`extensions.conf`) — AMI/ARI don't carry call audio.
 - `pollForAnswer` → since everything is now local and nothing needs to
   survive a serverless cold start, this doesn't need to stay an
   HTTP-polling loop against a remote service. It becomes waiting on the
@@ -285,13 +348,15 @@ instead:
 
 **New local components** `mcp-server` now depends on, all running on the
 same home network (per Open Question 2, likely the same always-on
-machine): the Asterisk PBX itself, the Python speech pipeline service
-bridged to it via AudioSocket, and the SIP soft-phone app on Will's
-phone. `mcp-server` talks to Asterisk (AMI/ARI) and to the Python
-pipeline service (whatever local IPC/HTTP/WebSocket mechanism is chosen
-to hand it a call and get a transcript back) — it does not talk to the
-phone or to AudioSocket directly; those stay inside the
-Asterisk/Python side of the bridge.
+machine): the Asterisk PBX and the Python speech pipeline service — both
+packaged as one Docker Compose stack per the Open Question 2 decision
+above, bridged to each other via AudioSocket inside that stack — and the
+SIP soft-phone app on Will's phone (see Open Question 3 for options).
+`mcp-server` talks to the compose stack over `localhost` ports: Asterisk
+via AMI/ARI, and the Python pipeline service via whatever local
+IPC/HTTP/WebSocket mechanism is chosen to hand it a call and get a
+transcript back. It does not talk to the phone or to AudioSocket
+directly; those stay inside the stack.
 
 **Docs to update once this is built:** `README.md`'s "How it works"
 diagram and "Setup" section (currently: deploy `web` to Vercel, set up
@@ -351,3 +416,16 @@ Quick reference for what changed relative to the original document:
   ships, since they document a Vercel deployment step, Twilio/Telnyx
   setup, and a `PUBLIC_BASE_URL`/webhook flow that no longer exist under
   the full-replacement decision.
+- **LLM-in-the-loop is a deferred extension, not a rejected idea** —
+  worth doing later, not designed in now. The natural seam for it is
+  after STT, before deciding what to say/return.
+- **Asterisk + the voice pipeline ship as one Docker Compose stack**
+  (confirmed), with `mcp-server` staying outside it as the plain local
+  Node process Claude Code spawns via stdio, talking to the stack over
+  `localhost`. The actual host machine is still unconfirmed.
+- **STT/TTS model selection (Parakeet vs. whisper.cpp, Kokoro vs. Piper)
+  is on hold** until the hardware target is confirmed, since it drives
+  model sizing.
+- **Soft-phone app options suggested**: Groundwire, Linphone, Zoiper —
+  see Open Question 3. The deciding factor across all of them is
+  reliable ringing when backgrounded/locked, not just when foregrounded.
