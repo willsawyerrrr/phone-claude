@@ -9,14 +9,12 @@
 > version.
 >
 > **Decision (superseding "Open Question" below on this point):** this is
-> a **full replacement** of the current cloud-hosted system — Twilio,
-> Telnyx, `web`'s Vercel deployment, and its Upstash Redis store are all
-> removed, not kept as a fallback or run alongside the local path. The
-> local Asterisk-based pipeline becomes the only way `ask_by_phone` works.
-> That resolves the Option A/B fork the first "Target Architecture"
-> callout below raises in favor of **Option B**: `mcp-server` talks to
-> Asterisk directly, and `web` goes away entirely rather than gaining a
-> new `VoiceProvider`. See
+> a **full replacement** of the current cloud-hosted system, going all
+> in on the local/on-device path. Twilio, Telnyx, `web`'s Vercel
+> deployment, and its Upstash Redis store are all removed — the local
+> Asterisk-based pipeline is the only way `ask_by_phone` works going
+> forward, not one of two supported paths. `mcp-server` talks to Asterisk
+> directly; `web` isn't kept around in any form. See
 > [Revised architecture: full local replacement](#revised-architecture-full-local-replacement)
 > for what that means concretely.
 
@@ -48,11 +46,9 @@ carrier costs, no injected boilerplate.
 > interface (`web/src/lib/providers/`) — **Twilio and Telnyx are both
 > fully supported today**, selected via a `VOICE_PROVIDER` env var, and
 > **Twilio is the default**, not Telnyx (`web/src/lib/providers/index.ts`
-> falls back to `"twilio"` when `VOICE_PROVIDER` is unset). If the
-> boilerplate-audio complaint is specific to Telnyx's call setup, simply
-> switching `VOICE_PROVIDER=twilio` may address that specific pain point
-> today, independent of this whole rebuild — worth confirming before
-> investing in the full local pipeline.
+> falls back to `"twilio"` when `VOICE_PROVIDER` is unset). Both are being
+> retired outright under the full-replacement decision above, so this is
+> noted for accuracy rather than as an argument for keeping either one.
 >
 > More importantly: **neither provider runs a "speech-to-speech AI
 > pipeline" today.** Both are intentionally dumb — Twilio's route
@@ -84,32 +80,13 @@ carrier costs, no injected boilerplate.
 6. Transcript is returned to Claude Code as the MCP tool result.
 7. Call is torn down.
 
-> **This skips over `web` entirely, and that's a bigger decision than it
-> looks.** Today the round trip is `mcp-server` (local, stdio, run by
-> Claude Code) → `web` (a Next.js app **deployed to Vercel**, i.e. in the
-> cloud) → voice provider → phone, with call state held in **Upstash
-> Redis** (`web/src/lib/store.ts`, 1 hour TTL) and `mcp-server` polling
-> `GET /api/calls/:id` every few seconds (`mcp-server/src/client.ts`).
-> This doc's flow has the **MCP tool server talk directly to a local
-> Asterisk box**, with no mention of `web`, Vercel, or Redis at all.
->
-> That's actually the architecturally sound move — `mcp-server` already
-> runs on Will's own machine (per `CLAUDE.md`: "standalone MCP server
-> (stdio transport) run locally by Claude Code"), so it's the one process
-> already positioned on the same network as a home Asterisk PBX. `web`
-> being Vercel-hosted is precisely the problem a "fully local" design is
-> trying to get away from: **a cloud-hosted `web` cannot reach an
-> Asterisk AMI/ARI endpoint sitting on a home LAN** without exposing that
-> endpoint to the public internet (a tunnel or a VPN) — which
-> reintroduces the "wider network" this doc is otherwise trying to avoid,
-> and adds a real attack surface (an internet-reachable PBX control
-> interface) that doesn't exist today.
->
-> **Decided:** rather than keep `web` around and give it a new
-> `VoiceProvider` that reaches Asterisk over a tunnel, `web`, Vercel, and
-> Redis are retired outright, and `mcp-server` absorbs call-placement and
-> orchestration directly — matching what this doc's flow actually
-> describes. See
+> This matches the full-replacement decision above: `mcp-server` — which
+> already runs locally on Will's own machine per `CLAUDE.md` ("standalone
+> MCP server (stdio transport) run locally by Claude Code") — talks to
+> Asterisk directly, rather than the current round trip through `web`
+> (Vercel-hosted) and its Redis-backed call state
+> (`web/src/lib/store.ts`). `web`, Vercel, and Redis aren't part of this
+> flow at all. See
 > [Revised architecture: full local replacement](#revised-architecture-full-local-replacement)
 > below for what that means for the existing code.
 
@@ -234,8 +211,8 @@ call-in-progress state, and graceful hangup once an answer is captured.
    > existing "always-on local machine" in this project today (`web`
    > runs on Vercel, `mcp-server` runs wherever Claude Code runs, which
    > may not be an always-on box). This needs an answer from Will before
-   > sizing models, and factors into the Option A/B decision above (an
-   > always-on home machine is required either way, to host Asterisk).
+   > sizing models — an always-on home machine to host Asterisk and the
+   > voice pipeline is new infrastructure this design requires.
 
 3. Soft-phone app choice for Will's phone (Linphone vs. alternatives).
 
@@ -265,8 +242,8 @@ call-in-progress state, and graceful hangup once an answer is captured.
 ## Revised architecture: full local replacement
 
 This section is new (not part of the original document) and spells out
-what "full replacement" means concretely for this repo, now that the
-Option A/B fork above is resolved in favor of retiring `web` entirely.
+what "full replacement" means concretely for this repo, now that `web`
+is being retired entirely rather than kept alongside the local path.
 
 **Removed:**
 - The `web` package's Vercel deployment.
