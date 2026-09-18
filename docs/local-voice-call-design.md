@@ -7,6 +7,18 @@
 > the current system that doesn't match reality. See
 > [Corrections summary](#corrections-summary) at the end for the short
 > version.
+>
+> **Decision (superseding "Open Question" below on this point):** this is
+> a **full replacement** of the current cloud-hosted system — Twilio,
+> Telnyx, `web`'s Vercel deployment, and its Upstash Redis store are all
+> removed, not kept as a fallback or run alongside the local path. The
+> local Asterisk-based pipeline becomes the only way `ask_by_phone` works.
+> That resolves the Option A/B fork the first "Target Architecture"
+> callout below raises in favor of **Option B**: `mcp-server` talks to
+> Asterisk directly, and `web` goes away entirely rather than gaining a
+> new `VoiceProvider`. See
+> [Revised architecture: full local replacement](#revised-architecture-full-local-replacement)
+> for what that means concretely.
 
 ## Goal
 
@@ -15,6 +27,14 @@ local, free alternative: Claude Code places a voice call to Will's phone
 over the local Wi-Fi network, asks a question via a speech-to-speech AI
 pipeline, and returns the spoken answer as tool output — no per-minute
 carrier costs, no injected boilerplate.
+
+> **Scope, made explicit:** "replace" means Twilio, Telnyx, `web`'s
+> Vercel deployment, and its Redis-backed `CallRecord` store are all
+> retired — not kept around as a secondary/fallback path. `mcp-server` is
+> the only thing Claude Code talks to, and it becomes self-sufficient:
+> home Wi-Fi (optionally bridged by a VPN, see Open Question 4) is the
+> only network this system depends on going forward, with no cloud
+> component of any kind in the call path.
 
 ## Current State
 
@@ -80,38 +100,18 @@ carrier costs, no injected boilerplate.
 > being Vercel-hosted is precisely the problem a "fully local" design is
 > trying to get away from: **a cloud-hosted `web` cannot reach an
 > Asterisk AMI/ARI endpoint sitting on a home LAN** without exposing that
-> endpoint to the public internet (a tunnel or the VPN mentioned in Open
-> Question 4) — which reintroduces the "wider network" this doc is
-> otherwise trying to avoid, and adds a real attack surface (an
-> internet-reachable PBX control interface) that doesn't exist today.
+> endpoint to the public internet (a tunnel or a VPN) — which
+> reintroduces the "wider network" this doc is otherwise trying to avoid,
+> and adds a real attack surface (an internet-reachable PBX control
+> interface) that doesn't exist today.
 >
-> So this needs an explicit decision, not just an implied one:
-> - **Option A** — a new `VoiceProvider` implementation added to `web`
->   (matching the extension point `CLAUDE.md` describes: "Adding another
->   platform ... means adding one file under `web/src/lib/providers/`
->   ... nothing else in `web` needs to change"), where `web` (still on
->   Vercel) talks to Asterisk's AMI/ARI over a tunnel/VPN. Keeps the
->   existing polling contract, Redis-backed `CallRecord`, and
->   `mcp-server` completely unchanged, at the cost of needing that
->   tunnel even when Will is on the home network Vercel can't reach.
->   - Note that Asterisk's own call flow (steps 2–7 above) doesn't fit
->     the request/webhook shape `VoiceProvider` was designed around
->     (`startCall`/`endCall` plus async callbacks) — an AMI/ARI
->     originate call, an AudioSocket session, and a transcript result
->     would need to be wrapped to fit that seam, or the seam extended.
-> - **Option B** — `mcp-server` bypasses `web`/Vercel/Redis entirely for
->   this provider and talks to the local Asterisk box directly (matching
->   what this doc actually describes), with `web` no longer in the path
->   at all for local calls. This is simpler for the local case but is a
->   bigger structural change than "swap the provider" — it means
->   `mcp-server` picking up call-placement and polling logic that
->   currently lives in `web`, and the two entry points (`web`'s HTTP API
->   vs. a local Asterisk client) no longer sharing a `VoiceProvider`
->   contract at all.
->
-> Worth resolving which of these (or a third option) is intended before
-> writing code, since it changes what "swap in a provider" even means for
-> this case.
+> **Decided:** rather than keep `web` around and give it a new
+> `VoiceProvider` that reaches Asterisk over a tunnel, `web`, Vercel, and
+> Redis are retired outright, and `mcp-server` absorbs call-placement and
+> orchestration directly — matching what this doc's flow actually
+> describes. See
+> [Revised architecture: full local replacement](#revised-architecture-full-local-replacement)
+> below for what that means for the existing code.
 
 ### Components
 
@@ -209,14 +209,12 @@ call-in-progress state, and graceful hangup once an answer is captured.
   off the home Wi-Fi, which the future VPN option addresses without
   reintroducing a telco.
 
-> As covered above, this last point undercounts where a wider network is
-> needed: if `web` stays on Vercel and Asterisk lives on the home LAN
-> (Option A above), reaching Asterisk's control interface from Vercel
-> requires exposing it beyond the LAN *even when Will is home* — the VPN
-> stops being a "future, off-network" nice-to-have and becomes a day-one
-> requirement for that option. Only if `mcp-server` talks to Asterisk
-> directly (Option B), with `web` out of the loop, does the "local Wi-Fi
-> only, VPN is optional" framing hold as written.
+> With `web`/Vercel retired (per the decision above), this framing holds
+> as written: since `mcp-server` talks to Asterisk directly and nothing
+> in the call path is cloud-hosted, the VPN really is only needed for the
+> off-network case (Will's phone away from home Wi-Fi) — it's not a
+> day-one requirement the way it would have been had `web` stayed on
+> Vercel.
 
 ## Open Questions for Claude Code to Resolve During Build
 
@@ -244,9 +242,11 @@ call-in-progress state, and graceful hangup once an answer is captured.
 4. Off-network reachability: is VPN bridging (Tailscale/WireGuard) in
    scope for v1, or LAN-only for now?
 
-   > See the note above `What Runs Fully Local and Free` — if `web`
-   > stays on Vercel (Option A), this isn't purely an off-network
-   > concern; it may be needed for on-network calls too.
+   > With the full-replacement decision above, this stays a genuinely
+   > optional, off-network-only concern — `mcp-server` reaching Asterisk
+   > is always a local/LAN call, so a VPN is only needed if Will's phone
+   > itself is expected to ring while off the home Wi-Fi. Fine to start
+   > LAN-only and add VPN bridging later without touching the core design.
 
 5. Silence/timeout handling: how long to wait for a spoken answer before
    giving up, and what the MCP tool should return in that case.
@@ -261,6 +261,67 @@ call-in-progress state, and graceful hangup once an answer is captured.
    > (`promptAttempt` in `CallRecord`). Both concerns — an overall
    > deadline, and a per-call no-input/repeat policy — will still be
    > needed with a local pipeline; only the mechanism changes.
+
+## Revised architecture: full local replacement
+
+This section is new (not part of the original document) and spells out
+what "full replacement" means concretely for this repo, now that the
+Option A/B fork above is resolved in favor of retiring `web` entirely.
+
+**Removed:**
+- The `web` package's Vercel deployment.
+- Both `VoiceProvider` implementations (`twilio.ts`, `telnyx.ts`) and
+  their env vars (`TWILIO_*`, `TELNYX_*`, `PUBLIC_BASE_URL`).
+- The `/api/calls*`, `/api/twiml/:callId`, and `/api/webhooks/*` routes.
+- The Upstash Redis `CallStore` and its `CallRecord` TTL/persistence
+  logic (`web/src/lib/store.ts`) — that existed to give a stateless,
+  horizontally-scaled serverless deployment somewhere to keep call state
+  between requests. `mcp-server` is a single long-running local process
+  per invocation, so it can just hold call state in memory for the
+  duration of one `ask_by_phone` call, the way it already tracks
+  `activeCall` today — no external store needed.
+
+**Kept, unchanged:** the `ask_by_phone` tool's name, input schema
+(`question`/`context`), and chat-fallback error message
+(`mcp-server/src/index.ts`); the overall wait/timeout/cancel behavior
+(`POLL_INTERVAL_MS`/`MAX_WAIT_MS`, `SIGINT`/`SIGTERM` handling). None of
+that is specific to Twilio/Telnyx/`web` — it's the shape Claude Code
+already depends on and should stay put.
+
+**Changed:** `mcp-server/src/client.ts`'s three functions
+(`startCall`, `pollForAnswer`, `cancelCall`) currently do their work via
+`fetch` calls to `web`. They get reimplemented against the local stack
+instead:
+- `startCall` → originate the call via Asterisk's AMI or ARI (pick one;
+  ARI's REST/WebSocket model maps more naturally onto a Node client than
+  AMI's line-based protocol) instead of `POST /api/calls`.
+- `pollForAnswer` → since everything is now local and nothing needs to
+  survive a serverless cold start, this doesn't need to stay an
+  HTTP-polling loop against a remote service. It becomes waiting on the
+  local voice pipeline to report a finished transcript for this call —
+  whether that's a promise resolved by a WebSocket/local-socket message
+  from the Python VAD/STT/TTS service, or a short local poll against it,
+  is an implementation detail now, not a constraint imposed by Vercel's
+  request/response model the way it was for `web`.
+- `cancelCall` → hang up via the same AMI/ARI connection instead of
+  `POST /api/calls/:id/cancel`.
+
+**New local components** `mcp-server` now depends on, all running on the
+same home network (per Open Question 2, likely the same always-on
+machine): the Asterisk PBX itself, the Python speech pipeline service
+bridged to it via AudioSocket, and the SIP soft-phone app on Will's
+phone. `mcp-server` talks to Asterisk (AMI/ARI) and to the Python
+pipeline service (whatever local IPC/HTTP/WebSocket mechanism is chosen
+to hand it a call and get a transcript back) — it does not talk to the
+phone or to AudioSocket directly; those stay inside the
+Asterisk/Python side of the bridge.
+
+**Docs to update once this is built:** `README.md`'s "How it works"
+diagram and "Setup" section (currently: deploy `web` to Vercel, set up
+Twilio or Telnyx, run `mcp-server` pointed at the deployed URL) and
+`CLAUDE.md`'s architecture section both describe the current
+`web`-in-the-middle design and will need rewriting to describe
+`mcp-server` + the local Asterisk/voice-pipeline stack instead.
 
 ## Reference Material
 
@@ -282,16 +343,19 @@ Quick reference for what changed relative to the original document:
   system is already single-question/single-answer via TTS + speech
   capture, which answers Open Question 1: the local LLM/llama.cpp stage
   is very likely unnecessary.
-- **The biggest gap: this doc doesn't say what happens to `web`.**
-  `web` is deployed to Vercel and can't reach a home-LAN Asterisk box
-  without exposing it publicly. Either (a) add Asterisk as a new
-  `VoiceProvider` in `web` and accept that a tunnel/VPN is needed
-  day one, or (b) have the already-local `mcp-server` talk to Asterisk
-  directly and drop `web`/Redis from this call path entirely. This
-  needs to be decided before implementation starts.
-- Consequently, **the VPN (Open Question 4) may not be a "future,
-  off-network only" concern** — it can be a v1 requirement depending on
-  which option above is chosen.
+- **The biggest gap: this doc didn't originally say what happens to
+  `web`.** `web` is deployed to Vercel and can't reach a home-LAN
+  Asterisk box without exposing it publicly. **Decided:** this is a full
+  replacement — `web`, Vercel, Redis, Twilio, and Telnyx are all retired,
+  and the already-local `mcp-server` absorbs call-placement and
+  orchestration, talking to Asterisk directly. See
+  [Revised architecture: full local replacement](#revised-architecture-full-local-replacement)
+  for what that changes concretely in `mcp-server/src/client.ts`.
+- Consequently, **the VPN (Open Question 4) stays a genuine
+  off-network-only concern** — with `web` gone, nothing in the call path
+  is cloud-hosted, so a VPN is only needed if Will's phone should be
+  reachable while off the home Wi-Fi, not for `mcp-server` to reach
+  Asterisk.
 - **Reuse, don't re-derive, existing timeout/cancel and
   segment-accumulation logic**: `mcp-server`'s poll/timeout/cancel flow
   and `web`'s lesson about not finalizing a reply on the first
@@ -305,3 +369,8 @@ Quick reference for what changed relative to the original document:
   serverless (Vercel) and `mcp-server` runs wherever Claude Code runs.
   An always-on local machine for Asterisk is a new piece of
   infrastructure this proposal introduces, not something being repurposed.
+- **`README.md` and `CLAUDE.md` both describe the current
+  `web`-in-the-middle architecture** and will need rewriting once this
+  ships, since they document a Vercel deployment step, Twilio/Telnyx
+  setup, and a `PUBLIC_BASE_URL`/webhook flow that no longer exist under
+  the full-replacement decision.
