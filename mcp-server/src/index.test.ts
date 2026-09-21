@@ -17,9 +17,13 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
 }));
 
 const config: Config = {
-  apiUrl: "https://example.com",
-  apiSecret: "secret",
-  userPhoneNumber: "+10000000000",
+  pipelineUrl: "http://localhost:8080",
+  ariUrl: "http://localhost:8088",
+  ariUsername: "phone-claude",
+  ariPassword: "secret",
+  sipEndpoint: "phone",
+  dialplanContext: "ask-by-phone",
+  dialplanExtension: "700",
   pollIntervalMs: 0,
   maxWaitMs: 1_000,
 };
