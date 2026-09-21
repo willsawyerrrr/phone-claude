@@ -1,0 +1,32 @@
+name: phone-claude-local
+
+services:
+  asterisk:
+    build: ./asterisk
+    restart: unless-stopped
+    environment:
+      HOST_LAN_IP: ${HOST_LAN_IP:?Set HOST_LAN_IP to this machine's LAN IP}
+      SIP_PORT: ${SIP_PORT:-5060}
+      RTP_START: ${RTP_START:-10000}
+      RTP_END: ${RTP_END:-10100}
+      LOCAL_NET: ${LOCAL_NET:-127.0.0.0/8 172.16.0.0/12}
+      SOFTPHONE_USERNAME: ${SOFTPHONE_USERNAME:-phone}
+      SOFTPHONE_PASSWORD: ${SOFTPHONE_PASSWORD:?Set SOFTPHONE_PASSWORD}
+      ARI_USERNAME: ${ARI_USERNAME:-phone-claude}
+      ARI_PASSWORD: ${ARI_PASSWORD:?Set ARI_PASSWORD}
+    ports:
+      - "${SIP_PORT:-5060}:5060/udp"
+      - "${SIP_PORT:-5060}:5060/tcp"
+      - "${RTP_START:-10000}-${RTP_END:-10100}:${RTP_START:-10000}-${RTP_END:-10100}/udp"
+      - "${ARI_BIND_ADDRESS:-127.0.0.1}:${ARI_PORT:-8088}:8088"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -u "$$ARI_USERNAME:$$ARI_PASSWORD" http://127.0.0.1:8088/ari/asterisk/ping &&
+          asterisk -rx "pjsip show endpoint $$SOFTPHONE_USERNAME" | grep -q "Endpoint:" &&
+          asterisk -rx "dialplan show 700@ask-by-phone" | grep -q AudioSocket
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
