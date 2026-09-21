@@ -21,3 +21,10 @@ jobs:
       - run: pnpm run test
       - run: pnpm run build
       - run: pnpm run format:check
+
+  voice-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target test -t voice-pipeline-test local/voice-pipeline
+      - run: docker run --rm voice-pipeline-test
