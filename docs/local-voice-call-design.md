@@ -117,6 +117,9 @@ after a TTL.
 
 ## Voice pipeline behaviour
 
+- **Keep-alive:** Asterisk drops an AudioSocket connection that goes quiet, so
+  a frame (speech, else silence) is sent every 20 ms from connect until the
+  call ends, including while a model is running.
 - **Speak:** TTS says the context (if any), then the question.
 - **Listen:** VAD detects speech; STT transcribes it. A reply is complete only
   after a quiet period with no further speech, so a reply spoken as several
@@ -130,8 +133,7 @@ after a TTL.
   just-completed answer does not overwrite it.
 
 STT and TTS run on CPU inside the 4 GB Docker VM, on arm64 and amd64. Model
-choice (for example faster-whisper or whisper.cpp for STT; Piper or Kokoro for
-TTS) is made in the pipeline's implementation and documented there. There is
+choice is documented in `local/voice-pipeline/README.md`. There is
 no LLM stage: a call is one question and one reply.
 
 ## `mcp-server`

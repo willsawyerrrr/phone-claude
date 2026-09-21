@@ -5,15 +5,16 @@ A Docker Compose stack that rings a SIP soft-phone on the local network, with no
 Services:
 
 - **`asterisk`** — the PBX. One PJSIP endpoint (the soft-phone), ARI on port 8088, and an `ask-by-phone` dialplan context. An ARI-originated call rings the soft-phone; once answered, extension `700` streams the call's audio over AudioSocket to `voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. `CALL_ID` must be a UUID, and is the connection's ID verbatim.
+- **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, loopback only) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
 
-The stack starts without `voice-pipeline`; the AudioSocket connection is only made once a call is answered.
+The AudioSocket connection is made only once the phone answers.
 
 ## Setup
 
 ```sh
 cp .env.example .env   # set HOST_LAN_IP, SOFTPHONE_PASSWORD, ARI_PASSWORD
-docker compose up -d --build
-docker compose ps      # asterisk should report "healthy"
+docker compose up -d --build   # the first build downloads the speech models (~1.2 GB image)
+docker compose ps      # asterisk and voice-pipeline should report "healthy"
 ```
 
 `HOST_LAN_IP` is this machine's LAN address as the phone reaches it (`ipconfig getifaddr en0` on macOS, `hostname -I` on Linux). Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this machine.

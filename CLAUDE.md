@@ -18,8 +18,12 @@ pnpm workspace with two packages:
 one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
 `mcp-server`'s `SIP_ENDPOINT`), ARI on port 8088, and the `ask-by-phone`
 context whose extension `700` streams the answered call to AudioSocket at
-`voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. See
-`local/README.md`.
+`voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. The
+`voice-pipeline` service (`local/voice-pipeline/`, Python) speaks the question
+with local TTS, listens with local VAD + STT, and exposes the `/calls` HTTP
+API; it streams a frame to Asterisk every 20 ms for the whole call because
+Asterisk drops a quiet AudioSocket connection. See `local/README.md` and
+`local/voice-pipeline/README.md`.
 
 ## Local call round-trip
 
