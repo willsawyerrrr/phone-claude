@@ -1,0 +1,39 @@
+name: PhoneClaude
+options:
+  bundleIdPrefix: dev.willsawyerrrr
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  linphone-sdk-swift-ios:
+    url: https://github.com/BelledonneCommunications/linphone-sdk-swift-ios
+    exactVersion: 5.5.23-novideo
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+targets:
+  PhoneClaude:
+    type: application
+    platform: iOS
+    sources: [PhoneClaude]
+    dependencies:
+      - package: linphone-sdk-swift-ios
+        product: linphonesw
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.willsawyerrrr.phone-claude
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Phone Claude
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Phone Claude uses the microphone so you can answer Claude's calls.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Phone Claude connects to the SIP server on your local network.
+  PhoneClaudeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [PhoneClaudeTests]
+    dependencies:
+      - target: PhoneClaude
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.willsawyerrrr.phone-claude.tests
+        GENERATE_INFOPLIST_FILE: YES
