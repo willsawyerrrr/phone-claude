@@ -57,8 +57,11 @@ Asterisk which address to advertise:
 - Publish SIP (`5060/udp`), ARI (`8088/tcp`), and a bounded RTP range
   (`10000-10099/udp`, matching `rtp.conf`).
 - Set `external_signaling_address` and `external_media_address` to
-  `HOST_LAN_IP`, and `local_net` to the container network, so SDP advertises
-  the host's LAN address rather than the container's.
+  `HOST_LAN_IP`, and `local_net` to loopback only (Docker presents LAN peers
+  from a private gateway address), so SIP advertises the host's LAN address
+  rather than the container's. Set `media_address` to `HOST_LAN_IP` on the
+  endpoint, because the transport's `external_media_address` does not rewrite
+  the SDP connection address.
 - Set `rtp_symmetric`, `force_rport`, and `direct_media=no` on the endpoint so
   audio flows back to whatever source address the phone's packets arrive from.
 - `HOST_LAN_IP` is the host's current LAN address; it is updated when DHCP
