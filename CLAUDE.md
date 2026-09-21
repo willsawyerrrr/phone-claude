@@ -12,6 +12,15 @@ pnpm workspace with two packages:
   Claude Code. Exposes one tool, `ask_by_phone`, backed by the local
   Asterisk + voice-pipeline stack.
 
+`local/` is that stack's Docker Compose definition (not a pnpm package). The
+`asterisk` service renders its config from env at container start
+(`local/asterisk/render-config.sh`), so it runs unchanged on any host. It has
+one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
+`mcp-server`'s `SIP_ENDPOINT`), ARI on port 8088, and the `ask-by-phone`
+context whose extension `700` streams the answered call to AudioSocket at
+`voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. See
+`local/README.md`.
+
 ## Local call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and

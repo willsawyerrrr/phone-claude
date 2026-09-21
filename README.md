@@ -14,7 +14,7 @@ Claude Code ──ask_by_phone──▶ mcp-server                        ▲   
 ```
 
 - **`mcp-server/`** — an MCP server run locally by Claude Code (stdio transport). Exposes one tool, `ask_by_phone`, which registers the question with the voice pipeline, has Asterisk originate the call over ARI, and polls the pipeline for the answer.
-- **Local stack** — Asterisk (SIP) and the voice pipeline (speaks the question, captures the spoken reply), run as a Docker Compose stack. Your phone rings through a SIP soft-phone registered to Asterisk.
+- **Local stack** — Asterisk (SIP) and the voice pipeline (speaks the question, captures the spoken reply), run as a Docker Compose stack. Your phone rings through a SIP soft-phone registered to Asterisk. See [`local/README.md`](local/README.md) for running the stack.
 - **`web/`** — a Next.js app deployed to Vercel that exposes a cloud call API backed by a pluggable `VoiceProvider` (`web/src/lib/providers/`, selected via `VOICE_PROVIDER`; **Twilio** and **Telnyx** are supported). `mcp-server` does not call it; see [Cloud path](#cloud-path-web) below.
 
 ## Setup
