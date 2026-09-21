@@ -152,9 +152,7 @@ endpoint.
 
 ## Decisions and open items
 
-- **Replaces the cloud path.** Twilio, Telnyx, the `web` package (and its
-  Vercel deployment), and the Redis `CallStore` are removed; `mcp-server` and
-  the local stack are the only components.
+- **Components.** `mcp-server` and the local stack are the only components.
 - **Machine-agnostic.** Host-specific values are env, not code; the stack is
   not tied to the current development machine.
 - **Soft-phone.** Groundwire, Linphone, and Zoiper are candidates. The deciding
@@ -166,9 +164,3 @@ endpoint.
   Code asks; which machine is open.
 - **Multi-turn dialogue.** Out of scope. A local LLM between STT and the reply
   is the natural extension point if it is wanted.
-
-## Docs updated when the stack ships
-
-`README.md` (how it works, setup) and `CLAUDE.md` (architecture, call
-round-trip) describe the current `web`-based design and are rewritten to
-describe `mcp-server` plus the local stack.

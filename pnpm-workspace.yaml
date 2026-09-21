@@ -1,5 +1,4 @@
 packages:
-  - web
   - mcp-server
 allowBuilds:
   esbuild: true
