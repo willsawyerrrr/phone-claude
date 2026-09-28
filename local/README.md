@@ -21,7 +21,7 @@ docker compose ps      # asterisk and voice-pipeline should report "healthy"
 
 Published ports: SIP `SIP_PORT` (UDP and TCP), RTP `RTP_START`–`RTP_END` (UDP, 1:1), and ARI `ARI_PORT` on `ARI_BIND_ADDRESS` (loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on.
 
-`LOCAL_NET` lists the networks Asterisk treats as local (Docker's own ranges by default). It must not include the phone's LAN subnet, or the phone is given the container's internal address. Docker Desktop on macOS presents LAN peers from its VM gateway (`192.168.65.1`), which the default correctly treats as non-local.
+`LOCAL_NET` lists the networks Asterisk treats as local (loopback by default). Docker presents LAN peers from a gateway address in a private Docker range (`192.168.65.1` or a `172.x` address on Docker Desktop for macOS), so no private range may be listed, or the phone is given the container's internal address in SIP. The soft-phone endpoint's `media_address` is `HOST_LAN_IP`, so SDP always advertises the host for RTP.
 
 ## Pairing the soft-phone
 

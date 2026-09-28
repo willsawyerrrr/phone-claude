@@ -103,6 +103,32 @@ async def test_fails_when_nothing_is_said(settings):
     assert channel.hung_up
 
 
+async def test_fails_when_no_audio_ever_arrives(settings):
+    channel = FakeChannel()
+    session, store, tts = make_session(channel, FakeStt(), settings)
+
+    async with asyncio.timeout(settings.no_input_timeout_s + 2):
+        await session.run()
+
+    assert store.get(CALL_ID).status == "failed"
+    assert store.get(CALL_ID).error == "No reply was heard"
+    assert tts.spoken[-1] == "Sorry, I didn't catch that. Goodbye."
+    assert channel.hung_up and channel.closed
+
+
+async def test_transcribes_what_was_heard_when_audio_stops_mid_reply(settings):
+    channel = FakeChannel(talk(0.4))
+    stt = FakeStt("yes ship it")
+    session, store, _ = make_session(channel, stt, settings)
+
+    async with asyncio.timeout(settings.quiet_period_s + 2):
+        await session.run()
+
+    assert len(stt.utterances) == 1
+    assert store.get(CALL_ID).answer == "yes ship it"
+    assert channel.hung_up
+
+
 async def test_repeat_restarts_the_no_input_wait(settings):
     channel = FakeChannel(talk(0.2) + quiet(1.0), quiet(0.8) + talk(0.2) + quiet(1.0))
     stt = FakeStt("repeat that", "yes")

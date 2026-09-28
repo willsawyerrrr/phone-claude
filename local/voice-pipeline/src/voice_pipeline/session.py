@@ -176,6 +176,11 @@ class CallSession:
         A reply is complete once `quiet_period_s` passes with no further
         speech — a reply often has pauses, so the first stretch of speech
         isn't taken as the whole thing.
+
+        Timing follows the received audio, so it only advances while frames
+        arrive. If none arrive at all, the wait is bounded in wall-clock time
+        instead: `no_input_timeout_s` before any speech, `quiet_period_s`
+        once the caller has started (the same silence that ends a reply).
         """
         settings = self._settings
         self._vad.reset()
@@ -188,29 +193,40 @@ class CallSession:
         while True:
             if self._hung_up.is_set():
                 return _NoInput.HUNG_UP
-            frame = await self._inbox.get()
-            if frame is None:
-                return _NoInput.HUNG_UP
-            clock += len(frame) / BYTES_PER_SECOND
-
-            if self._vad.is_speech(frame):
-                if speech_started is None:
-                    speech_started = clock
-                    audio.extend(b"".join(preroll))
-                audio.extend(frame)
-                last_speech = clock
-            elif speech_started is None:
-                preroll.append(frame)
+            stall_limit = (
+                settings.no_input_timeout_s
+                if speech_started is None
+                else settings.quiet_period_s
+            )
+            stalled = False
+            try:
+                frame = await asyncio.wait_for(self._inbox.get(), stall_limit)
+            except TimeoutError:
+                stalled = True
             else:
-                audio.extend(frame)
+                if frame is None:
+                    return _NoInput.HUNG_UP
+                clock += len(frame) / BYTES_PER_SECOND
+
+                if self._vad.is_speech(frame):
+                    if speech_started is None:
+                        speech_started = clock
+                        audio.extend(b"".join(preroll))
+                    audio.extend(frame)
+                    last_speech = clock
+                elif speech_started is None:
+                    preroll.append(frame)
+                else:
+                    audio.extend(frame)
 
             if speech_started is None:
-                if clock >= settings.no_input_timeout_s:
+                if stalled or clock >= settings.no_input_timeout_s:
                     return _NoInput.TIMED_OUT
                 continue
 
             if (
-                clock - last_speech >= settings.quiet_period_s
+                stalled
+                or clock - last_speech >= settings.quiet_period_s
                 or clock - speech_started >= settings.max_reply_s
             ):
                 text = await asyncio.to_thread(self._stt.transcribe, bytes(audio))
