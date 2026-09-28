@@ -9,3 +9,9 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 .venv/
+
+# iOS
+ios/*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/

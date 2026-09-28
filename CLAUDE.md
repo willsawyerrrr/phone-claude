@@ -21,6 +21,12 @@ API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. See `local/README.md` and
 `local/voice-pipeline/README.md`.
 
+`ios/` is a SwiftUI soft-phone (not a pnpm package; the Xcode project is
+generated from `ios/project.yml` with XcodeGen) that registers to `asterisk`
+as the `SOFTPHONE_USERNAME` endpoint and answers calls, using the Linphone SDK
+for SIP and media. It is foreground only (no CallKit/PushKit). See
+`ios/README.md`.
+
 ## Local call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and

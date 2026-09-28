@@ -40,6 +40,8 @@ Confirm registration with:
 docker compose exec asterisk asterisk -rx 'pjsip show contacts'
 ```
 
+[`ios/`](../ios/README.md) is an alternative to these apps: a purpose-built iOS soft-phone that registers with the same account (foreground only).
+
 The contact should be `Avail`. A locked or backgrounded phone only rings if the app has working push notifications; test that on the actual phone before relying on it.
 
 ## Placing a test call
