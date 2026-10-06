@@ -8,6 +8,16 @@ for var in HOST_LAN_IP SIP_PORT RTP_START RTP_END LOCAL_NET \
   [ -n "${!var:-}" ] || { echo "$var is required" >&2; exit 1; }
 done
 
+# `;` starts a comment in Asterisk config and a newline ends the value, so either would truncate the password.
+for var in SOFTPHONE_PASSWORD ARI_PASSWORD; do
+  case "${!var}" in
+    *\;* | *$'\n'* | *$'\r'*)
+      echo "$var must not contain ';' or newlines" >&2
+      exit 1
+      ;;
+  esac
+done
+
 LOCAL_NET_LINES=""
 for net in $LOCAL_NET; do
   LOCAL_NET_LINES+="local_net=${net}"$'\n'
