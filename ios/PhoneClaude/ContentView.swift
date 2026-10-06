@@ -28,9 +28,12 @@ struct ContentView: View {
                         Button("Register", action: register)
                             .disabled(!config.isComplete)
                     } else {
-                        Button("Unregister", role: .destructive, action: client.unregister)
+                        Button(
+                            client.registration.isFailed ? "Retry" : "Unregister",
+                            role: client.registration.isFailed ? nil : .destructive,
+                            action: client.registration.isFailed ? register : client.unregister)
                     }
-                    if let error {
+                    if let error = error ?? client.error {
                         Text(error).foregroundStyle(.red)
                     }
                 }
@@ -64,8 +67,8 @@ struct ContentView: View {
 
     private func register() {
         error = nil
-        config.save()
         do {
+            try config.save()
             try client.register(config)
         } catch {
             self.error = error.localizedDescription

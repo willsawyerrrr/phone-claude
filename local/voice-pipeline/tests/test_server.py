@@ -210,3 +210,25 @@ async def test_a_second_connection_for_a_call_is_rejected(http, audiosocket_port
     await asyncio.wait_for(first.read_until_hangup(), 2)
     body = await (await http.get(f"/calls/{CALL_ID}")).json()
     assert body == {"callId": CALL_ID, "status": "failed", "error": "Cancelled"}
+
+
+async def test_shutting_down_hangs_up_calls_and_fails_pending_ones(
+    http, audiosocket_port, pipeline
+):
+    other_id = "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed"
+    await register(http)
+    await register(http, other_id)
+    asterisk = await FakeAsterisk.connect(audiosocket_port)
+    await asterisk.send_audio([SILENCE])
+    await asyncio.sleep(0.05)
+
+    await pipeline.shutdown()
+
+    await asyncio.wait_for(asterisk.read_until_hangup(), 2)
+    for call_id in (CALL_ID, other_id):
+        body = await (await http.get(f"/calls/{call_id}")).json()
+        assert body == {
+            "callId": call_id,
+            "status": "failed",
+            "error": "The pipeline shut down",
+        }

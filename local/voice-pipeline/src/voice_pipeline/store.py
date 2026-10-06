@@ -53,6 +53,8 @@ class CallStore:
         return record
 
     def get(self, call_id: str) -> CallRecord | None:
+        """Returns the call, or `None` if it is unknown or has expired."""
+        self._prune()
         return self._calls.get(call_id)
 
     def answer(self, call_id: str, answer: str) -> bool:
@@ -70,6 +72,11 @@ class CallStore:
         record.status = "failed"
         record.error = error
         return True
+
+    def fail_pending(self, error: str) -> None:
+        """Fails every call that is still pending."""
+        for call_id in list(self._calls):
+            self.fail(call_id, error)
 
     def _prune(self) -> None:
         now = time.monotonic()
