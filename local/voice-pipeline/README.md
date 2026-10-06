@@ -35,6 +35,8 @@ On `SIGTERM` or `SIGINT` the pipeline stops accepting audio connections, hangs u
 | STT   | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) `base.en`, int8 | About 150 MB and around a second for a short reply on CPU; noticeably more accurate than `tiny.en` on phone audio. |
 | TTS   | [Piper](https://github.com/OHF-Voice/piper1-gpl) `en_US-lessac-medium`      | About 60 MB and faster than real time on CPU; Kokoro sounds more natural but is heavier.                           |
 
+Builds are reproducible: the `Dockerfile` pins the base image by digest, the Whisper model by Hugging Face revision and the Piper voice by revision and checksum, and `requirements.txt` pins every Python dependency (installed with `pip install -c requirements.txt`). Dependabot updates these pins.
+
 All three fit in the 4 GB Docker Desktop VM on arm64 and amd64. Swap a model by changing `WHISPER_MODEL` / `PIPER_VOICE` and the download step in the `Dockerfile`.
 
 ## Configuration
