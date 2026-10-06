@@ -62,3 +62,15 @@ def test_an_expired_call_is_not_returned():
     record.created_at -= 61
 
     assert store.get("a") is None
+
+
+def test_fail_pending_leaves_finished_calls_alone():
+    store = CallStore(ttl_s=60)
+    store.register("a", "q", None)
+    store.register("b", "q", None)
+    store.answer("b", "yes")
+
+    store.fail_pending("Shut down")
+
+    assert store.get("a").error == "Shut down"
+    assert store.get("b").status == "answered"

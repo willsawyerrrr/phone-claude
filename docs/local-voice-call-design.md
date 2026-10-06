@@ -133,6 +133,8 @@ after a TTL.
   question is spoken again rather than recorded as the answer.
 - **No input:** if nothing is said within the no-input window, or the caller
   hangs up while the call is `pending`, the call is `failed`.
+- **Shutdown:** on `SIGTERM`/`SIGINT` the pipeline hangs up calls in progress
+  and fails every `pending` call.
 - **Errors:** an unexpected error during a call fails it and hangs up. A second
   AudioSocket connection for a call already in progress is rejected, and a
   cancel does not cut off a call that already has an outcome.
