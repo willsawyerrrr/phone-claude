@@ -47,7 +47,8 @@ class Pipeline:
         return cancelled
 
     async def shutdown(self) -> None:
-        """Hangs up every call in progress."""
+        """Fails every pending call and hangs up every call in progress."""
+        self.store.fail_pending("The pipeline shut down")
         tasks = list(self._sessions.values())
         for task in tasks:
             task.cancel()

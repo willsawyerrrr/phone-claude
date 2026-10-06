@@ -28,7 +28,8 @@ Signalling is UDP. The password is stored in the Keychain; the rest in `UserDefa
 
 ## Layout
 
-- `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up.
+- `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up. A failed registration is stopped and can be retried.
+- `CallTracker.swift` — tracks the single current call; a second incoming call is declined as busy.
 - `SIPConfig.swift`, `Keychain.swift` — connection settings and their persistence.
 - `ContentView.swift` — settings form, registration status, and answer/decline/hang-up controls.
 
