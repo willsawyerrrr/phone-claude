@@ -22,65 +22,84 @@ final class SIPClient {
     }
 
     private(set) var registration = Registration.unregistered
-    private(set) var callState = CallState.idle
+    private(set) var error: String?
+    var callState: CallState { calls.state }
 
     @ObservationIgnored private var core: Core?
     @ObservationIgnored private var delegate: CoreDelegateStub?
     @ObservationIgnored private var call: Call?
+    private var calls = CallTracker<ObjectIdentifier>()
 
     /// Registers as `config`'s user, replacing any existing registration.
+    ///
+    /// On failure the partially created core is stopped and `registration` returns to `.unregistered`.
     func register(_ config: SIPConfig) throws {
         unregister()
         registration = .registering
 
         let factory = Factory.Instance
-        let core = try factory.createCore(configPath: "", factoryConfigPath: "", systemContext: nil)
-        core.ipv6Enabled = false
+        var core: Core?
+        var delegate: CoreDelegateStub?
+        do {
+            let newCore = try factory.createCore(configPath: "", factoryConfigPath: "", systemContext: nil)
+            core = newCore
+            newCore.ipv6Enabled = false
 
-        let delegate = CoreDelegateStub(
-            onCallStateChanged: { [weak self] _, call, state, _ in self?.callChanged(call, state) },
-            onAccountRegistrationStateChanged: { [weak self] _, _, state, message in
-                self?.registrationChanged(state, message)
-            }
-        )
-        core.addDelegate(delegate: delegate)
+            let newDelegate = CoreDelegateStub(
+                onCallStateChanged: { [weak self] _, call, state, _ in self?.callChanged(call, state) },
+                onAccountRegistrationStateChanged: { [weak self] _, _, state, message in
+                    self?.registrationChanged(state, message)
+                }
+            )
+            delegate = newDelegate
+            newCore.addDelegate(delegate: newDelegate)
 
-        core.addAuthInfo(
-            info: try factory.createAuthInfo(
-                username: config.username, userid: nil, passwd: config.password,
-                ha1: nil, realm: nil, domain: nil))
+            newCore.addAuthInfo(
+                info: try factory.createAuthInfo(
+                    username: config.username, userid: nil, passwd: config.password,
+                    ha1: nil, realm: nil, domain: nil))
 
-        let params = try core.createAccountParams()
-        try params.setIdentityaddress(newValue: factory.createAddress(addr: config.identityURI))
-        try params.setServeraddress(newValue: factory.createAddress(addr: config.serverURI))
-        params.registerEnabled = true
-        let account = try core.createAccount(params: params)
-        try core.addAccount(account: account)
-        core.defaultAccount = account
+            let params = try newCore.createAccountParams()
+            try params.setIdentityaddress(newValue: factory.createAddress(addr: config.identityURI))
+            try params.setServeraddress(newValue: factory.createAddress(addr: config.serverURI))
+            params.registerEnabled = true
+            let account = try newCore.createAccount(params: params)
+            try newCore.addAccount(account: account)
+            newCore.defaultAccount = account
 
-        try core.start()
+            try newCore.start()
+        } catch {
+            if let core, let delegate { core.removeDelegate(delegate: delegate) }
+            core?.stop()
+            registration = .unregistered
+            throw error
+        }
         self.core = core
         self.delegate = delegate
         UIApplication.shared.isIdleTimerDisabled = true
     }
 
+    /// Stops the core and returns to `.unregistered`, discarding any call and error.
     func unregister() {
+        if let core, let delegate { core.removeDelegate(delegate: delegate) }
         core?.stop()
         core = nil
         delegate = nil
         call = nil
-        callState = .idle
+        calls.reset()
+        error = nil
         registration = .unregistered
         UIApplication.shared.isIdleTimerDisabled = false
     }
 
+    /// Answers the ringing call, recording `error` on failure.
     func answer() {
-        try? call?.accept()
+        do { try call?.accept() } catch { self.error = error.localizedDescription }
     }
 
-    /// Declines a ringing call or ends an active one.
+    /// Declines a ringing call or ends an active one, recording `error` on failure.
     func hangUp() {
-        try? call?.terminate()
+        do { try call?.terminate() } catch { self.error = error.localizedDescription }
     }
 
     private func registrationChanged(_ state: RegistrationState, _ message: String) {
@@ -93,16 +112,20 @@ final class SIPClient {
     }
 
     private func callChanged(_ call: Call, _ state: Call.State) {
+        let id = ObjectIdentifier(call)
         let peer = call.remoteAddress?.username ?? "unknown"
         switch state {
         case .IncomingReceived:
-            self.call = call
-            callState = .ringing(from: peer)
+            if calls.incoming(id, from: peer) {
+                self.call = call
+            } else {
+                do { try call.decline(reason: .Busy) } catch { self.error = error.localizedDescription }
+            }
         case .Connected, .StreamsRunning:
-            callState = .active(with: peer)
+            calls.connected(id, with: peer)
         case .End, .Error, .Released:
-            self.call = nil
-            callState = .idle
+            calls.ended(id)
+            if calls.current == nil { self.call = nil }
         default:
             break
         }

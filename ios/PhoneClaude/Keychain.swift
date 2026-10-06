@@ -22,10 +22,39 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
-    static func set(_ value: String, for account: String) {
-        SecItemDelete(query(account) as CFDictionary)
-        var q = query(account)
-        q[kSecValueData] = Data(value.utf8)
-        SecItemAdd(q as CFDictionary, nil)
+    /// Stores `value`, replacing any existing item for `account`.
+    static func set(_ value: String, for account: String) throws {
+        let data = Data(value.utf8)
+        let status = SecItemUpdate(query(account) as CFDictionary, [kSecValueData: data] as CFDictionary)
+        switch status {
+        case errSecSuccess:
+            return
+        case errSecItemNotFound:
+            var q = query(account)
+            q[kSecValueData] = data
+            q[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            try check(SecItemAdd(q as CFDictionary, nil))
+        default:
+            try check(status)
+        }
+    }
+
+    /// Removes the item for `account`; succeeds if there is none.
+    static func delete(_ account: String) throws {
+        let status = SecItemDelete(query(account) as CFDictionary)
+        if status != errSecItemNotFound { try check(status) }
+    }
+
+    private static func check(_ status: OSStatus) throws {
+        guard status == errSecSuccess else { throw KeychainError(status: status) }
+    }
+}
+
+struct KeychainError: LocalizedError {
+    let status: OSStatus
+
+    var errorDescription: String? {
+        let message = SecCopyErrorMessageString(status, nil) as String? ?? "status \(status)"
+        return "Keychain error: \(message)"
     }
 }
