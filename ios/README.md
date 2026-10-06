@@ -33,7 +33,7 @@ Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it
 - `CallTracker.swift` — tracks the single current call; a second incoming call is declined as busy.
 - `SIPConfig.swift`, `Keychain.swift` — connection settings and their persistence.
 - `ContentView.swift` — settings form, registration status, and answer/decline/hang-up controls.
-- `PhoneClaudeTests/` — unit tests (`SIPConfigTests.swift`, `CallTrackerTests.swift`).
+- `PhoneClaudeTests/` — unit tests (`SIPConfigTests.swift`, `CallTrackerTests.swift`, `KeychainTests.swift`).
 
 ## Simulator
 
