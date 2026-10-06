@@ -37,10 +37,12 @@ class Pipeline:
         self._sessions: dict[str, asyncio.Task] = {}
 
     def cancel(self, call_id: str) -> bool:
-        """Marks a pending call failed and hangs up its audio connection."""
+        """Marks a pending call failed and hangs up its audio connection.
+
+        A call that already has an outcome is left to finish."""
         cancelled = self.store.fail(call_id, "Cancelled")
         task = self._sessions.get(call_id)
-        if task is not None:
+        if cancelled and task is not None:
             task.cancel()
         return cancelled
 
@@ -60,7 +62,11 @@ class Pipeline:
         except TimeoutError:
             call_id = None
         record = self.store.get(call_id) if call_id else None
-        if record is None or record.status != "pending":
+        if (
+            record is None
+            or record.status != "pending"
+            or record.call_id in self._sessions
+        ):
             log.warning("rejecting audio connection for call %s", call_id)
             await channel.send_hangup()
             await channel.close()

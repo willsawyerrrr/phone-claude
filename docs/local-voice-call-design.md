@@ -132,6 +132,9 @@ after a TTL.
   rather than recorded as the answer.
 - **No input:** if nothing is said within the no-input window, or the caller
   hangs up while the call is `pending`, the call is `failed`.
+- **Errors:** an unexpected error during a call fails it and hangs up. A second
+  AudioSocket connection for a call already in progress is rejected, and a
+  cancel does not cut off a call that already has an outcome.
 - **Status:** the terminal status is written once; a cancel that races a
   just-completed answer does not overwrite it.
 
