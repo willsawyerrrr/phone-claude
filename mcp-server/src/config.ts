@@ -8,6 +8,8 @@ export interface Config {
   dialplanExtension: string;
   pollIntervalMs: number;
   maxWaitMs: number;
+  pushWaitMs: number;
+  ringTimeoutS: number;
 }
 
 const DEFAULT_PIPELINE_URL = "http://localhost:8080";
@@ -17,6 +19,8 @@ const DEFAULT_DIALPLAN_CONTEXT = "ask-by-phone";
 const DEFAULT_DIALPLAN_EXTENSION = "700";
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
 const DEFAULT_MAX_WAIT_MS = 10 * 60 * 1_000;
+const DEFAULT_PUSH_WAIT_MS = 20_000;
+const DEFAULT_RING_TIMEOUT_S = 60;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const ariUsername = requireEnv(env, "ARI_USERNAME");
@@ -36,6 +40,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       DEFAULT_POLL_INTERVAL_MS,
     ),
     maxWaitMs: positiveNumber(env, "MAX_WAIT_MS", DEFAULT_MAX_WAIT_MS),
+    pushWaitMs: positiveNumber(env, "PUSH_WAIT_MS", DEFAULT_PUSH_WAIT_MS),
+    ringTimeoutS: positiveNumber(env, "RING_TIMEOUT_S", DEFAULT_RING_TIMEOUT_S),
   };
 }
 
