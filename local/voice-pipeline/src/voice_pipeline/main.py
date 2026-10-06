@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import signal
 from pathlib import Path
 
 from aiohttp import web
@@ -19,6 +20,11 @@ async def serve(settings: Settings) -> None:
         PiperSpeaker(models / f"{settings.piper_voice}.onnx"),
     )
 
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+
     audiosocket = await asyncio.start_server(
         pipeline.handle_audiosocket, "0.0.0.0", settings.audiosocket_port
     )
@@ -30,8 +36,12 @@ async def serve(settings: Settings) -> None:
         settings.audiosocket_port,
         settings.http_port,
     )
-    async with audiosocket:
-        await audiosocket.serve_forever()
+
+    await stop.wait()
+    logging.getLogger(__name__).info("shutting down")
+    audiosocket.close()
+    await pipeline.shutdown()
+    await runner.cleanup()
 
 
 def main() -> None:
