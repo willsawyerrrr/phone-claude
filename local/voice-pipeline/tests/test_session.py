@@ -2,6 +2,8 @@ import asyncio
 import threading
 import time
 
+import pytest
+
 from tests.conftest import (
     FakeChannel,
     FakeStt,
@@ -12,7 +14,7 @@ from tests.conftest import (
     quiet,
     talk,
 )
-from voice_pipeline.session import CallSession
+from voice_pipeline.session import REPEAT_PATTERN, CallSession
 from voice_pipeline.store import CallStore
 
 CALL_ID = "8d1f4c2e-7a3b-4c55-9f0e-2b6a1d3c4e5f"
@@ -361,3 +363,51 @@ async def test_a_send_crash_fails_the_call_promptly(settings):
 
     assert store.get(CALL_ID).error == "The call failed unexpectedly"
     assert channel.hung_up
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "again",
+        "Pardon?",
+        "Sorry?",
+        "Come again?",
+        "One more time please",
+        "Repeat that.",
+        "Please repeat",
+        "can you say that again",
+        "Could you please repeat the question",
+        "say it once more",
+        "what was the question",
+        "I didn't catch that",
+        "Sorry, what was that?",
+    ],
+)
+def test_repeat_requests_are_recognised(reply):
+    assert REPEAT_PATTERN.search(reply)
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "yes, run it again",
+        "don't repeat the migration",
+        "no, do not repeat that step",
+        "yes, but again only on staging",
+        "sorry, no",
+        "what a great idea, ship it",
+        "yes ship it one more time",
+    ],
+)
+def test_real_answers_are_not_taken_for_repeat_requests(reply):
+    assert not REPEAT_PATTERN.search(reply)
+
+
+async def test_an_answer_containing_again_is_recorded(settings):
+    channel = FakeChannel(talk(0.2) + quiet(1.0))
+    session, store, tts = make_session(channel, FakeStt("yes, run it again"), settings)
+
+    await session.run()
+
+    assert store.get(CALL_ID).answer == "yes, run it again"
+    assert tts.spoken == ["Ship it?", "Got it, thanks. Goodbye."]

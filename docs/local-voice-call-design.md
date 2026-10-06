@@ -127,9 +127,10 @@ after a TTL.
 - **Listen:** VAD detects speech; STT transcribes it. A reply is complete only
   after a quiet period with no further speech, so a reply spoken as several
   segments is captured whole.
-- **Repeat:** if the reply looks like a request to hear the question again (a
-  keyword match, up to a small repeat limit), the question is spoken again
-  rather than recorded as the answer.
+- **Repeat:** if the reply is a request to hear the question again (a bare
+  `again` or `pardon`, or a phrase such as `can you repeat that`, up to a small
+  repeat limit; an answer that merely contains `again` is recorded), the
+  question is spoken again rather than recorded as the answer.
 - **No input:** if nothing is said within the no-input window, or the caller
   hangs up while the call is `pending`, the call is `failed`.
 - **Errors:** an unexpected error during a call fails it and hangs up. A second
