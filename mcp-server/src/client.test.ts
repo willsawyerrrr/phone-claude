@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "./config.js";
 import { cancelCall, pollForAnswer, startCall } from "./client.js";
 
@@ -23,8 +23,7 @@ interface FakeServer {
   close: () => Promise<void>;
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const callId = "call-1";
 
 async function startFakeServer(handler: Handler): Promise<FakeServer> {
   const requests: RecordedRequest[] = [];
@@ -113,7 +112,7 @@ describe("client", () => {
 
   describe("startCall", () => {
     it("registers the prompt with the pipeline, then originates via ARI", async () => {
-      const callId = await startCall(config, "Deploy?", "Staging is green");
+      await startCall(config, callId, "Deploy?", "Staging is green");
 
       const [register] = pipeline.requests;
       expect(register).toMatchObject({ method: "POST", path: "/calls" });
@@ -142,15 +141,6 @@ describe("client", () => {
       );
     });
 
-    it("uses a UUID as the call ID, distinct per call", async () => {
-      const first = await startCall(config, "One?");
-      const second = await startCall(config, "Two?");
-
-      expect(first).toMatch(UUID_PATTERN);
-      expect(second).toMatch(UUID_PATTERN);
-      expect(first).not.toBe(second);
-    });
-
     it("registers the prompt before originating the call", async () => {
       const order: string[] = [];
       await restartServers(
@@ -164,24 +154,65 @@ describe("client", () => {
         },
       );
 
-      await startCall(config, "Deploy?");
+      await startCall(config, callId, "Deploy?");
 
       expect(order).toEqual(["pipeline", "ari"]);
     });
 
-    it("throws without originating when the pipeline rejects the prompt", async () => {
+    it("throws without originating, and hangs up, when the pipeline rejects the prompt", async () => {
       await restartServers(failWith(500, "boom"));
 
-      await expect(startCall(config, "Deploy?")).rejects.toThrow(
+      await expect(startCall(config, callId, "Deploy?")).rejects.toThrow(
         /Failed to register call \(500\): boom/,
       );
-      expect(ari.requests).toHaveLength(0);
+      expect(ari.requests.filter((r) => r.method === "POST")).toHaveLength(0);
+    });
+
+    it("hangs up and throws when the register request fails at the network", async () => {
+      await pipeline.close();
+
+      await expect(startCall(config, callId, "Deploy?")).rejects.toThrow();
+
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({
+          method: "DELETE",
+          path: `/ari/channels/${callId}`,
+        }),
+      );
+    });
+
+    it("hangs up and throws when the originate request fails at the network", async () => {
+      await ari.close();
+
+      await expect(startCall(config, callId, "Deploy?")).rejects.toThrow();
+
+      expect(pipeline.requests).toContainEqual(
+        expect.objectContaining({
+          method: "POST",
+          path: `/calls/${callId}/cancel`,
+        }),
+      );
+    });
+
+    it("bounds a hung request with a timeout and hangs up", async () => {
+      await restartServers(okHandler, () => {});
+      const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+      const spy = vi
+        .spyOn(AbortSignal, "timeout")
+        .mockImplementation(() => realTimeout(50));
+
+      await expect(startCall(config, callId, "Deploy?")).rejects.toThrow();
+
+      spy.mockRestore();
+      expect(pipeline.requests).toContainEqual(
+        expect.objectContaining({ path: `/calls/${callId}/cancel` }),
+      );
     });
 
     it("cancels the registered prompt and throws when ARI rejects the originate", async () => {
       await restartServers(okHandler, failWith(400, "no such endpoint"));
 
-      await expect(startCall(config, "Deploy?")).rejects.toThrow(
+      await expect(startCall(config, callId, "Deploy?")).rejects.toThrow(
         /Failed to originate call \(400\): no such endpoint/,
       );
 
@@ -239,6 +270,61 @@ describe("client", () => {
 
       await expect(pollForAnswer(config, "call-1")).rejects.toThrow(
         /Failed to poll call status \(404\)/,
+      );
+    });
+
+    it("hangs up when the poll request fails at the network", async () => {
+      await pipeline.close();
+
+      await expect(pollForAnswer(config, "call-1")).rejects.toThrow();
+
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/ari/channels/call-1",
+        }),
+      );
+    });
+
+    it("hangs up when the pipeline rejects the poll", async () => {
+      await restartServers(failWith(500));
+
+      await expect(pollForAnswer(config, "call-1")).rejects.toThrow();
+
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({ method: "DELETE" }),
+      );
+      expect(pipeline.requests).toContainEqual(
+        expect.objectContaining({ path: "/calls/call-1/cancel" }),
+      );
+    });
+
+    it("hangs up when the call is reported failed", async () => {
+      await restartServers((_request, response) =>
+        json(response, 200, { status: "failed", error: "No answer" }),
+      );
+
+      await expect(pollForAnswer(config, "call-1")).rejects.toThrow();
+
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+
+    it("bounds a hung poll with a timeout and hangs up", async () => {
+      await restartServers((request) => {
+        if (request.method === "GET") return;
+      });
+      const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+      const spy = vi
+        .spyOn(AbortSignal, "timeout")
+        .mockImplementation(() => realTimeout(50));
+
+      await expect(pollForAnswer(config, "call-1")).rejects.toThrow();
+
+      spy.mockRestore();
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({ method: "DELETE" }),
       );
     });
 

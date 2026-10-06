@@ -41,8 +41,9 @@ for SIP and media. It is foreground only (no CallKit/PushKit). See
 3. `mcp-server` polls the pipeline's `GET /calls/:id` every few seconds (see
    `mcp-server/src/client.ts` for why polling rather than a long-lived
    connection) until the status is `answered` or `failed`.
-4. If the poll times out, or the process is interrupted
-   (`SIGINT`/`SIGTERM`) while a call is in flight, `mcp-server` hangs up the
+4. If starting or polling the call fails (every request has a timeout), the
+   poll times out, or the process is interrupted (`SIGINT`/`SIGTERM`) while
+   any call is in flight (including one still starting), `mcp-server` hangs up the
    ARI channel (`DELETE /ari/channels/:callId`) and POSTs the pipeline's
    `/calls/:id/cancel`. Both are best-effort.
 
