@@ -6,6 +6,15 @@ import type { Config } from "./config.js";
 import { loadConfig } from "./config.js";
 import { cancelCall, pollForAnswer, startCall } from "./client.js";
 
+/** Loaded once at startup; a configuration error is reported through each tool call's chat fallback. */
+const configResult: { config: Config } | { error: Error } = (() => {
+  try {
+    return { config: loadConfig() };
+  } catch (error) {
+    return { error: error instanceof Error ? error : new Error(String(error)) };
+  }
+})();
+
 const server = new McpServer({
   name: "phone-claude",
   version: "0.1.0",
@@ -30,6 +39,19 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
+function fallback(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `Could not get a phone answer (${message}). Ask the user in chat instead.`,
+      },
+    ],
+    isError: true,
+  };
+}
+
 server.registerTool(
   "ask_by_phone",
   {
@@ -50,7 +72,8 @@ server.registerTool(
     },
   },
   async ({ question, context }) => {
-    const config = loadConfig();
+    if ("error" in configResult) return fallback(configResult.error);
+    const { config } = configResult;
 
     try {
       const callId = await startCall(config, question, context);
@@ -58,16 +81,7 @@ server.registerTool(
       const answer = await pollForAnswer(config, callId);
       return { content: [{ type: "text", text: answer }] };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Could not get a phone answer (${message}). Ask the user in chat instead.`,
-          },
-        ],
-        isError: true,
-      };
+      return fallback(error);
     } finally {
       activeCall = null;
     }
