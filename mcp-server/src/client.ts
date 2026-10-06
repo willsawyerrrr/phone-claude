@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
 import type { Config } from "./config.js";
 
 const CANCEL_TIMEOUT_MS = 5_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 interface CallStatusResponse {
   status: "pending" | "answered" | "failed";
@@ -11,56 +11,60 @@ interface CallStatusResponse {
 
 /**
  * Places a call: registers the prompt with the voice pipeline, then has
- * Asterisk originate the call to the soft-phone via ARI. The call ID is a
- * UUID because Asterisk's AudioSocket keys the audio stream by one; it also
- * names the ARI channel, so the call can be hung up without tracking a
- * separate channel ID. The prompt is registered first so it's in place by the
- * time the phone answers and AudioSocket connects.
+ * Asterisk originate the call to the soft-phone via ARI. The caller supplies
+ * the call ID (a UUID, because Asterisk's AudioSocket keys the audio stream
+ * by one) so it can track and cancel the call from before the first request.
+ * It also names the ARI channel, so the call can be hung up without tracking
+ * a separate channel ID. The prompt is registered first so it's in place by
+ * the time the phone answers and AudioSocket connects. Any failure hangs up
+ * whatever was started before it is thrown.
  */
 export async function startCall(
   config: Config,
+  callId: string,
   question: string,
   context?: string,
-): Promise<string> {
-  const callId = randomUUID();
-
-  const register = await fetch(`${config.pipelineUrl}/calls`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ callId, question, context }),
-  });
-  if (!register.ok) {
-    throw new Error(
-      `Failed to register call (${register.status}): ${await register.text()}`,
-    );
-  }
-
-  const originate = await fetch(
-    `${config.ariUrl}/ari/channels?${new URLSearchParams({
-      endpoint: `PJSIP/${config.sipEndpoint}`,
-      context: config.dialplanContext,
-      extension: config.dialplanExtension,
-      priority: "1",
-      channelId: callId,
-    })}`,
-    {
+): Promise<void> {
+  try {
+    const register = await fetch(`${config.pipelineUrl}/calls`, {
       method: "POST",
-      headers: {
-        Authorization: ariAuthorization(config),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ variables: { CALL_ID: callId } }),
-    },
-  );
-  if (!originate.ok) {
-    const detail = await originate.text();
-    await cancelPipelineCall(config, callId);
-    throw new Error(
-      `Failed to originate call (${originate.status}): ${detail}`,
-    );
-  }
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callId, question, context }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!register.ok) {
+      throw new Error(
+        `Failed to register call (${register.status}): ${await register.text()}`,
+      );
+    }
 
-  return callId;
+    const originate = await fetch(
+      `${config.ariUrl}/ari/channels?${new URLSearchParams({
+        endpoint: `PJSIP/${config.sipEndpoint}`,
+        context: config.dialplanContext,
+        extension: config.dialplanExtension,
+        priority: "1",
+        channelId: callId,
+      })}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: ariAuthorization(config),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ variables: { CALL_ID: callId } }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
+    );
+    if (!originate.ok) {
+      throw new Error(
+        `Failed to originate call (${originate.status}): ${await originate.text()}`,
+      );
+    }
+  } catch (error) {
+    await cancelCall(config, callId);
+    throw error;
+  }
 }
 
 /**
@@ -75,34 +79,40 @@ export async function pollForAnswer(
 ): Promise<string> {
   const deadline = Date.now() + config.maxWaitMs;
 
-  while (Date.now() < deadline) {
-    const response = await fetch(`${config.pipelineUrl}/calls/${callId}`);
+  try {
+    while (Date.now() < deadline) {
+      const response = await fetch(`${config.pipelineUrl}/calls/${callId}`, {
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to poll call status (${response.status})`);
+      if (!response.ok) {
+        throw new Error(`Failed to poll call status (${response.status})`);
+      }
+
+      const status = (await response.json()) as CallStatusResponse;
+
+      if (status.status === "answered") {
+        return status.answer ?? "";
+      }
+      if (status.status === "failed") {
+        throw new Error(status.error ?? "Call failed");
+      }
+
+      await sleep(config.pollIntervalMs);
     }
 
-    const status = (await response.json()) as CallStatusResponse;
-
-    if (status.status === "answered") {
-      return status.answer ?? "";
-    }
-    if (status.status === "failed") {
-      throw new Error(status.error ?? "Call failed");
-    }
-
-    await sleep(config.pollIntervalMs);
+    throw new Error(
+      `Timed out after ${config.maxWaitMs}ms waiting for an answer`,
+    );
+  } catch (error) {
+    await cancelCall(config, callId);
+    throw error;
   }
-
-  await cancelCall(config, callId);
-  throw new Error(
-    `Timed out after ${config.maxWaitMs}ms waiting for an answer`,
-  );
 }
 
 /**
- * Hangs up a call that's no longer being waited on — the poll timed out, or
- * the process is shutting down — by dropping the ARI channel and marking the
+ * Hangs up a call that's no longer being waited on — starting or polling it
+ * failed, or the process is shutting down — by dropping the ARI channel and marking the
  * call cancelled in the pipeline. Best-effort: swallows any error (including
  * a bounded request timing out itself, or the channel already being gone)
  * since there's no one left to report a cancellation failure to, and the call

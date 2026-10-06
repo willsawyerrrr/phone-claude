@@ -25,8 +25,9 @@ Claude Code ──stdio──▶ mcp-server
    transcript.
 5. `mcp-server` polls `voice-pipeline`, sees the terminal status, and returns
    the answer (or a failure message) as the tool result.
-6. On timeout or `SIGINT`/`SIGTERM`, `mcp-server` hangs up via ARI and cancels
-   the call in `voice-pipeline`.
+6. If starting or polling the call fails (including a request timing out),
+   on timeout, or on `SIGINT`/`SIGTERM`, `mcp-server` hangs up via ARI and
+   cancels the call in `voice-pipeline`.
 
 `mcp-server` runs as the plain local Node process Claude Code spawns over
 stdio; it is not part of the stack and reaches it over `localhost` ports.
@@ -149,8 +150,12 @@ no LLM stage: a call is one question and one reply.
 
 The tool's name, input schema (`question`, `context`), chat-fallback message,
 and the wait, timeout, and cancel behaviour (`POLL_INTERVAL_MS`,
-`MAX_WAIT_MS`, `SIGINT`/`SIGTERM`) are unchanged. `src/client.ts` implements
-its three operations against the stack:
+`MAX_WAIT_MS`, `SIGINT`/`SIGTERM`) are fixed. `src/client.ts` implements its
+three operations against the stack. Every request carries a timeout, and a
+failure in `startCall` or `pollForAnswer` cancels the call before it is
+thrown. `src/index.ts` generates each call ID before the first request and
+tracks all in-flight calls, so concurrent calls and an interrupt during
+`startCall` are all hung up on shutdown.
 
 - `startCall` — `POST /calls` to the pipeline, then originate via ARI.
 - `pollForAnswer` — `GET /calls/:id` on the pipeline.

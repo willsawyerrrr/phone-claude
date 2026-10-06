@@ -16,6 +16,9 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
   }),
 }));
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 const config: Config = {
   pipelineUrl: "http://localhost:8080",
   ariUrl: "http://localhost:8088",
@@ -78,37 +81,123 @@ describe("shutdown on SIGINT/SIGTERM", () => {
   });
 
   it("cancels the in-flight call on SIGINT", async () => {
-    vi.mocked(startCall).mockResolvedValue("call-1");
+    vi.mocked(startCall).mockResolvedValue(undefined);
     vi.mocked(pollForAnswer).mockReturnValue(new Promise(() => {})); // never resolves
 
     void handler({ question: "Deploy?" });
     await flushAsync();
+    const callId = vi.mocked(startCall).mock.calls[0]![1];
 
     process.emit("SIGINT");
     await flushAsync();
 
-    expect(cancelCall).toHaveBeenCalledWith(config, "call-1");
+    expect(callId).toMatch(UUID_PATTERN);
+    expect(cancelCall).toHaveBeenCalledWith(config, callId);
     expect(exitSpy).toHaveBeenCalledWith(130);
   });
 
   it("cancels the in-flight call on SIGTERM", async () => {
-    vi.mocked(startCall).mockResolvedValue("call-2");
+    vi.mocked(startCall).mockResolvedValue(undefined);
     vi.mocked(pollForAnswer).mockReturnValue(new Promise(() => {})); // never resolves
 
     void handler({ question: "Deploy?" });
     await flushAsync();
+    const callId = vi.mocked(startCall).mock.calls[0]![1];
 
     process.emit("SIGTERM");
     await flushAsync();
 
-    expect(cancelCall).toHaveBeenCalledWith(config, "call-2");
+    expect(cancelCall).toHaveBeenCalledWith(config, callId);
     expect(exitSpy).toHaveBeenCalledWith(143);
+  });
+
+  it("cancels a call interrupted while it is still starting", async () => {
+    vi.mocked(startCall).mockReturnValue(new Promise(() => {})); // never resolves
+
+    void handler({ question: "Deploy?" });
+    await flushAsync();
+    const callId = vi.mocked(startCall).mock.calls[0]![1];
+
+    process.emit("SIGINT");
+    await flushAsync();
+
+    expect(cancelCall).toHaveBeenCalledWith(config, callId);
+  });
+
+  it("cancels every concurrent in-flight call", async () => {
+    vi.mocked(startCall).mockResolvedValue(undefined);
+    vi.mocked(pollForAnswer).mockReturnValue(new Promise(() => {})); // never resolves
+
+    void handler({ question: "One?" });
+    void handler({ question: "Two?" });
+    await flushAsync();
+    const [first, second] = vi
+      .mocked(startCall)
+      .mock.calls.map((call) => call[1]);
+
+    process.emit("SIGINT");
+    await flushAsync();
+
+    expect(first).not.toBe(second);
+    expect(cancelCall).toHaveBeenCalledWith(config, first);
+    expect(cancelCall).toHaveBeenCalledWith(config, second);
+  });
+
+  it("keeps a call tracked when another call finishes first", async () => {
+    vi.mocked(startCall).mockResolvedValue(undefined);
+    vi.mocked(pollForAnswer)
+      .mockReturnValueOnce(new Promise(() => {})) // never resolves
+      .mockResolvedValueOnce("Yes");
+
+    void handler({ question: "Slow?" });
+    await flushAsync();
+    await handler({ question: "Fast?" });
+    const [slow, fast] = vi
+      .mocked(startCall)
+      .mock.calls.slice(-2)
+      .map((call) => call[1]);
+
+    process.emit("SIGINT");
+    await flushAsync();
+
+    expect(cancelCall).toHaveBeenCalledWith(config, slow);
+    expect(cancelCall).not.toHaveBeenCalledWith(config, fast);
+  });
+});
+
+describe("ask_by_phone", () => {
+  it("returns the answer", async () => {
+    vi.mocked(startCall).mockReset().mockResolvedValue(undefined);
+    vi.mocked(pollForAnswer).mockReset().mockResolvedValue("Yes");
+
+    await expect(handler({ question: "Deploy?" })).resolves.toEqual({
+      content: [{ type: "text", text: "Yes" }],
+    });
+  });
+
+  it.each([
+    ["starting the call", () => vi.mocked(startCall)],
+    ["waiting for the answer", () => vi.mocked(pollForAnswer)],
+  ])("falls back to chat when %s fails", async (_name, failing) => {
+    vi.mocked(startCall).mockReset().mockResolvedValue(undefined);
+    vi.mocked(pollForAnswer).mockReset().mockResolvedValue("Yes");
+    failing().mockRejectedValue(new Error("fetch failed"));
+
+    await expect(handler({ question: "Deploy?" })).resolves.toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Could not get a phone answer (fetch failed). Ask the user in chat instead.",
+        },
+      ],
+      isError: true,
+    });
   });
 });
 
 describe("configuration", () => {
   it("loads the config once, not per call", async () => {
-    vi.mocked(startCall).mockReset().mockResolvedValue("call-3");
+    vi.mocked(startCall).mockReset().mockResolvedValue(undefined);
     vi.mocked(pollForAnswer).mockReset().mockResolvedValue("Yes");
     vi.mocked(loadConfig).mockClear();
 

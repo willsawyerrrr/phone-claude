@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -20,18 +21,19 @@ const server = new McpServer({
   version: "0.1.0",
 });
 
-/** The call currently being polled for, if any — set only while a call is in flight. */
-let activeCall: { config: Config; callId: string } | null = null;
+/** IDs of the calls in flight, from before their first request until they finish. */
+const activeCalls = new Set<string>();
 
 /**
- * Cancels the in-flight call, if any, then exits — run on `SIGINT`/`SIGTERM`
- * so an interrupted `ask_by_phone` doesn't leave the phone ringing after the
+ * Cancels every in-flight call, then exits — run on `SIGINT`/`SIGTERM` so an
+ * interrupted `ask_by_phone` doesn't leave the phone ringing after the
  * process that was waiting on it is gone. `cancelCall` bounds its own
- * request with a timeout, so this can't hang process shutdown.
+ * requests with a timeout, so this can't hang process shutdown.
  */
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
-  if (activeCall) {
-    await cancelCall(activeCall.config, activeCall.callId);
+  if ("config" in configResult) {
+    const { config } = configResult;
+    await Promise.all([...activeCalls].map((id) => cancelCall(config, id)));
   }
   process.exit(signal === "SIGINT" ? 130 : 143);
 }
@@ -75,15 +77,16 @@ server.registerTool(
     if ("error" in configResult) return fallback(configResult.error);
     const { config } = configResult;
 
+    const callId = randomUUID();
+    activeCalls.add(callId);
     try {
-      const callId = await startCall(config, question, context);
-      activeCall = { config, callId };
+      await startCall(config, callId, question, context);
       const answer = await pollForAnswer(config, callId);
       return { content: [{ type: "text", text: answer }] };
     } catch (error) {
       return fallback(error);
     } finally {
-      activeCall = null;
+      activeCalls.delete(callId);
     }
   },
 );
