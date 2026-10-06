@@ -328,6 +328,84 @@ describe("client", () => {
       );
     });
 
+    it("fails promptly when the channel is gone while the call is pending", async () => {
+      await restartServers(
+        (_request, response) => json(response, 200, { status: "pending" }),
+        (request, response) => {
+          if (request.method === "GET") return failWith(404)(request, response);
+          json(response, 200, {});
+        },
+      );
+      config.maxWaitMs = 60_000;
+
+      await expect(pollForAnswer(config, "call-1")).rejects.toThrow(
+        /busy, declined, or did not answer/,
+      );
+
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({
+          method: "GET",
+          path: "/ari/channels/call-1",
+        }),
+      );
+      expect(ari.requests[0]!.headers.authorization).toMatch(/^Basic /);
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({ method: "DELETE" }),
+      );
+      expect(pipeline.requests).toContainEqual(
+        expect.objectContaining({ path: "/calls/call-1/cancel" }),
+      );
+    });
+
+    it("returns the answer when the channel is gone because the call just completed", async () => {
+      let polls = 0;
+      await restartServers((_request, response) => {
+        polls += 1;
+        json(
+          response,
+          200,
+          polls === 1
+            ? { status: "pending" }
+            : { status: "answered", answer: "Yes" },
+        );
+      }, failWith(404));
+
+      await expect(pollForAnswer(config, "call-1")).resolves.toBe("Yes");
+    });
+
+    it("keeps waiting while the channel exists", async () => {
+      let polls = 0;
+      await restartServers((_request, response) => {
+        polls += 1;
+        json(
+          response,
+          200,
+          polls < 3
+            ? { status: "pending" }
+            : { status: "answered", answer: "Later" },
+        );
+      });
+
+      await expect(pollForAnswer(config, "call-1")).resolves.toBe("Later");
+      expect(ari.requests.filter((r) => r.method === "GET")).toHaveLength(2);
+    });
+
+    it("keeps waiting when ARI cannot be checked", async () => {
+      let polls = 0;
+      await restartServers((_request, response) => {
+        polls += 1;
+        json(
+          response,
+          200,
+          polls < 3
+            ? { status: "pending" }
+            : { status: "answered", answer: "Later" },
+        );
+      }, failWith(500));
+
+      await expect(pollForAnswer(config, "call-1")).resolves.toBe("Later");
+    });
+
     it("times out if the call stays pending past maxWaitMs", async () => {
       await restartServers((_request, response) =>
         json(response, 200, { status: "pending" }),
