@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var client = SIPClient()
+    private var client: SIPClient { model.client }
+    @State private var model = AppModel.shared
     @State private var config = SIPConfig.load()
     @State private var error: String?
 
@@ -19,6 +20,8 @@ struct ContentView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     SecureField("Password", text: $config.password)
+                    TextField("Push registration port", value: $config.devicePort, format: .number.grouping(.never))
+                        .keyboardType(.numberPad)
                 }
                 .disabled(client.registration != .unregistered)
 
@@ -31,9 +34,9 @@ struct ContentView: View {
                         Button(
                             client.registration.isFailed ? "Retry" : "Unregister",
                             role: client.registration.isFailed ? nil : .destructive,
-                            action: client.registration.isFailed ? register : client.unregister)
+                            action: client.registration.isFailed ? register : model.disable)
                     }
-                    if let error = error ?? client.error {
+                    if let error = error ?? client.error ?? model.deviceError {
                         Text(error).foregroundStyle(.red)
                     }
                 }
@@ -43,12 +46,12 @@ struct ContentView: View {
                     EmptyView()
                 case .ringing(let peer):
                     Section("Incoming call from \(peer)") {
-                        Button("Answer", action: client.answer)
-                        Button("Decline", role: .destructive, action: client.hangUp)
+                        Button("Answer", action: model.answer)
+                        Button("Decline", role: .destructive, action: model.hangUp)
                     }
                 case .active(let peer):
                     Section("In call with \(peer)") {
-                        Button("Hang up", role: .destructive, action: client.hangUp)
+                        Button("Hang up", role: .destructive, action: model.hangUp)
                     }
                 }
             }
@@ -68,8 +71,7 @@ struct ContentView: View {
     private func register() {
         error = nil
         do {
-            try config.save()
-            try client.register(config)
+            try model.enable(config)
         } catch {
             self.error = error.localizedDescription
         }
