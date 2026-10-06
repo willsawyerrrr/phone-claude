@@ -50,4 +50,6 @@ for SIP and media. It is foreground only (no CallKit/PushKit). See
 `ARI_USERNAME` and `ARI_PASSWORD` (required), `ARI_URL` (default
 `http://localhost:8088`), `PIPELINE_URL` (default `http://localhost:8080`),
 `SIP_ENDPOINT` (default `phone`), `DIALPLAN_CONTEXT` (default `ask-by-phone`),
-`DIALPLAN_EXTENSION` (default `700`), `POLL_INTERVAL_MS` and `MAX_WAIT_MS`.
+`DIALPLAN_EXTENSION` (default `700`), `POLL_INTERVAL_MS` and `MAX_WAIT_MS` (positive numbers). The config is
+loaded and validated once at startup; an invalid one is reported to the
+caller through each `ask_by_phone` call's ask-in-chat fallback.

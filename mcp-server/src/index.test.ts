@@ -32,6 +32,8 @@ vi.mock("./config.js", () => ({
   loadConfig: vi.fn(() => config),
 }));
 
+const { loadConfig } = await import("./config.js");
+
 vi.mock("./client.js", () => ({
   startCall: vi.fn(),
   pollForAnswer: vi.fn(),
@@ -101,5 +103,42 @@ describe("shutdown on SIGINT/SIGTERM", () => {
 
     expect(cancelCall).toHaveBeenCalledWith(config, "call-2");
     expect(exitSpy).toHaveBeenCalledWith(143);
+  });
+});
+
+describe("configuration", () => {
+  it("loads the config once, not per call", async () => {
+    vi.mocked(startCall).mockReset().mockResolvedValue("call-3");
+    vi.mocked(pollForAnswer).mockReset().mockResolvedValue("Yes");
+    vi.mocked(loadConfig).mockClear();
+
+    await handler({ question: "Deploy?" });
+    await handler({ question: "Deploy?" });
+
+    expect(loadConfig).not.toHaveBeenCalled();
+  });
+
+  it("reports an invalid configuration through the chat fallback", async () => {
+    vi.resetModules();
+    registerTool.mockClear();
+    vi.mocked(loadConfig).mockImplementationOnce(() => {
+      throw new Error("Missing required env var: ARI_USERNAME");
+    });
+    await import("./index.js");
+    const failing = registerTool.mock.calls[0]?.[2] as typeof handler;
+
+    const result = await failing({ question: "Deploy?" });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: expect.stringContaining(
+            "Missing required env var: ARI_USERNAME",
+          ),
+        },
+      ],
+      isError: true,
+    });
   });
 });
