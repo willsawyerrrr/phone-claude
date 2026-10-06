@@ -11,6 +11,9 @@ enum Keychain {
         ]
     }
 
+    /// Readable while the phone is locked, so a VoIP push can register the app.
+    private static let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
     static func get(_ account: String) -> String? {
         var q = query(account)
         q[kSecReturnData] = true
@@ -25,14 +28,16 @@ enum Keychain {
     /// Stores `value`, replacing any existing item for `account`.
     static func set(_ value: String, for account: String) throws {
         let data = Data(value.utf8)
-        let status = SecItemUpdate(query(account) as CFDictionary, [kSecValueData: data] as CFDictionary)
+        let status = SecItemUpdate(
+            query(account) as CFDictionary,
+            [kSecValueData: data, kSecAttrAccessible: accessibility] as CFDictionary)
         switch status {
         case errSecSuccess:
             return
         case errSecItemNotFound:
             var q = query(account)
             q[kSecValueData] = data
-            q[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            q[kSecAttrAccessible] = accessibility
             try check(SecItemAdd(q as CFDictionary, nil))
         default:
             try check(status)

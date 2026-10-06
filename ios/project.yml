@@ -15,6 +15,14 @@ targets:
     type: application
     platform: iOS
     sources: [PhoneClaude]
+    info:
+      path: PhoneClaude/Info.plist
+      properties:
+        UIBackgroundModes: [voip, audio]
+    entitlements:
+      path: PhoneClaude/PhoneClaude.entitlements
+      properties:
+        aps-environment: development
     dependencies:
       - package: linphone-sdk-swift-ios
         product: linphonesw

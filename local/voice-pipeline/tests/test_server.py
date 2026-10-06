@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from dataclasses import replace
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
@@ -21,14 +22,54 @@ from voice_pipeline.audiosocket import (
     encode_frame,
     read_frame,
 )
+from voice_pipeline.devices import Device, DeviceStore
+from voice_pipeline.push import NoDevice, NotConfigured, PushError
 from voice_pipeline.server import Pipeline
 
 CALL_ID = "8d1f4c2e-7a3b-4c55-9f0e-2b6a1d3c4e5f"
 
 
+DEVICE_TOKEN = "ab" * 32
+SECRET = "hunter2"
+
+
+class FakePusher:
+    def __init__(self) -> None:
+        self.error: Exception | None = None
+        self.sent = 0
+
+    async def send(self) -> None:
+        if self.error:
+            raise self.error
+        self.sent += 1
+
+    async def aclose(self) -> None:
+        pass
+
+
 @pytest.fixture
-async def pipeline(settings):
-    return Pipeline(settings, FakeVad, FakeStt("yes ship it"), FakeTts(), no_pace)
+def pusher():
+    return FakePusher()
+
+
+@pytest.fixture
+async def pipeline(settings, tmp_path, pusher):
+    settings = replace(settings, device_secret=SECRET)
+    return Pipeline(
+        settings,
+        FakeVad,
+        FakeStt("yes ship it"),
+        FakeTts(),
+        no_pace,
+        DeviceStore(tmp_path / "device.json"),
+        pusher,
+    )
+
+
+@pytest.fixture
+async def device_http(pipeline):
+    async with TestClient(TestServer(pipeline.device_app())) as client:
+        yield client
 
 
 @pytest.fixture
@@ -232,3 +273,87 @@ async def test_shutting_down_hangs_up_calls_and_fails_pending_ones(
             "status": "failed",
             "error": "The pipeline shut down",
         }
+
+
+async def test_push_sends(http, pusher):
+    assert (await http.post("/push")).status == 204
+    assert pusher.sent == 1
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "message"),
+    [
+        (NoDevice(), 404, "No device registered"),
+        (NotConfigured(), 503, "APNs is not configured"),
+        (PushError("TooManyRequests"), 502, "TooManyRequests"),
+    ],
+)
+async def test_push_failures(http, pusher, error, status, message):
+    pusher.error = error
+    response = await http.post("/push")
+    assert response.status == status
+    assert await response.json() == {"error": message}
+
+
+def auth(secret=SECRET):
+    return {"Authorization": f"Bearer {secret}"}
+
+
+def device_body(**overrides):
+    return {"token": DEVICE_TOKEN.upper(), "environment": "sandbox", **overrides}
+
+
+async def test_register_device(http, device_http, pipeline):
+    assert await (await http.get("/device")).json() == {"registered": False}
+    response = await device_http.put("/device", json=device_body(), headers=auth())
+    assert response.status == 204
+    assert pipeline.devices.get() == Device(DEVICE_TOKEN, "sandbox")
+    body = await (await http.get("/device")).json()
+    assert body == {"registered": True, "environment": "sandbox"}
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [{}, auth("wrong"), {"Authorization": SECRET}, {"Authorization": "Basic x"}],
+)
+async def test_register_device_requires_secret(device_http, pipeline, headers):
+    response = await device_http.put("/device", json=device_body(), headers=headers)
+    assert response.status == 401
+    assert pipeline.devices.get() is None
+
+
+async def test_register_device_rejects_all_without_secret(settings, tmp_path, pusher):
+    pipeline = Pipeline(
+        settings,
+        FakeVad,
+        FakeStt(),
+        FakeTts(),
+        no_pace,
+        DeviceStore(tmp_path / "d.json"),
+        pusher,
+    )
+    async with TestClient(TestServer(pipeline.device_app())) as client:
+        for headers in ({}, auth(""), auth("x")):
+            response = await client.put("/device", json=device_body(), headers=headers)
+            assert response.status == 401
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        device_body(token="nothex"),
+        device_body(environment="staging"),
+        {"environment": "sandbox"},
+        [],
+    ],
+)
+async def test_register_device_rejects_invalid_body(device_http, pipeline, body):
+    response = await device_http.put("/device", json=body, headers=auth())
+    assert response.status == 400
+    assert pipeline.devices.get() is None
+
+
+async def test_device_app_exposes_only_device_registration(device_http):
+    assert (await device_http.post("/push")).status == 404
+    assert (await device_http.get("/healthz")).status == 404
+    assert (await device_http.get("/device", headers=auth())).status == 405

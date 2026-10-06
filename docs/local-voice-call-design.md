@@ -18,7 +18,9 @@ Claude Code ──stdio──▶ mcp-server
 
 1. Claude Code calls `ask_by_phone` (`question`, optional `context`).
 2. `mcp-server` registers the prompt with `voice-pipeline`, then originates a
-   call to the soft-phone through Asterisk's ARI.
+   call to the soft-phone through Asterisk's ARI. If the phone is offline
+   (the app is closed or locked), it first has `voice-pipeline` send a VoIP
+   push and waits for the phone to register.
 3. When the phone answers, the dialplan hands the call's audio to
    `voice-pipeline` over AudioSocket.
 4. `voice-pipeline` speaks the question, listens for the reply, and stores the
@@ -36,15 +38,16 @@ Claude Code ──stdio──▶ mcp-server
 stdio; it is not part of the stack and reaches it over `localhost` ports.
 
 The soft-phone is any SIP app or the SwiftUI app in `ios/`, which registers as
-the same PJSIP endpoint and answers calls while foregrounded.
+the same PJSIP endpoint and answers calls through CallKit, including from the
+lock screen.
 
 ## The Compose stack
 
 Lives under `local/`. Two services on one Docker network:
 
 - `asterisk` — PJSIP endpoint for the soft-phone, ARI, and the dialplan.
-- `voice-pipeline` — Python: AudioSocket server, VAD, STT, TTS, and the HTTP
-  API.
+- `voice-pipeline` — Python: AudioSocket server, VAD, STT, TTS, the HTTP
+  API, the phone's push token, and the APNs sender.
 
 `docker compose up` is the whole install. Every host-specific value comes from
 env (`local/.env`, template in `.env.example`), so the same stack runs on any
@@ -73,7 +76,8 @@ Asterisk which address to advertise:
   audio flows back to whatever source address the phone's packets arrive from.
 - `HOST_LAN_IP` is the host's current LAN address; it is updated when DHCP
   reassigns it (or reserved on the router).
-- `voice-pipeline`'s ports (`8080`) are published to `localhost` only;
+- `voice-pipeline`'s API (`8080`) is published to `localhost` only, and its
+  device-registration port (`8081`) to `HOST_LAN_IP`;
   AudioSocket (`9092`) is reachable only inside the Docker network.
 
 The soft-phone registers to `HOST_LAN_IP:SIP_PORT` over Wi-Fi.
@@ -84,14 +88,14 @@ The soft-phone registers to `HOST_LAN_IP:SIP_PORT` over Wi-Fi.
 
 `mcp-server` originates with `POST /ari/channels`:
 
-| Parameter   | Value                                 |
-| ----------- | ------------------------------------- |
-| `endpoint`  | `PJSIP/<phone endpoint>`              |
-| `context`   | `ask-by-phone`                        |
-| `extension` | `700`                                 |
-| `channelId` | the call ID                           |
-| `variables` | `{"CALL_ID": "<call ID>"}`            |
-| `timeout`   | seconds Asterisk rings before failing |
+| Parameter   | Value                                                   |
+| ----------- | ------------------------------------------------------- |
+| `endpoint`  | `PJSIP/<phone endpoint>`                                |
+| `context`   | `ask-by-phone`                                          |
+| `extension` | `700`                                                   |
+| `channelId` | the call ID                                             |
+| `variables` | `{"CALL_ID": "<call ID>"}`                              |
+| `timeout`   | `RING_TIMEOUT_S`, seconds Asterisk rings before failing |
 
 The call ID is a UUID (AudioSocket keys the stream by UUID). Hang up with
 `DELETE /ari/channels/<call ID>`. ARI carries control only, never audio.
@@ -122,9 +126,38 @@ rejected: the pipeline hangs up the connection.
 | `GET /calls/:id`         | `{status: "pending" \| "answered" \| "failed", answer?, error?}`. |
 | `POST /calls/:id/cancel` | Ends the call if in flight and marks it `failed`; idempotent.     |
 | `GET /healthz`           | `{ok: true}`.                                                     |
+| `POST /push`             | Sends the VoIP push; `204`, `404` no device, `503`, `502`.        |
+| `PUT /device` (`:8081`)  | `{token, environment}`, bearer auth; stores the push token.       |
 
 Call state is held in memory for the life of the process; a call is dropped
 after a TTL.
+
+## Ringing a locked phone
+
+iOS suspends a backgrounded soft-phone, so it would have no SIP contact and
+an ARI originate would fail. A VoIP push wakes it instead:
+
+1. The app stops its SIP client in the background; Asterisk marks the
+   endpoint offline (AOR expiry 120 s, qualify every 15 s).
+2. `mcp-server` sees the endpoint is not `online` in ARI, `POST`s
+   `voice-pipeline`'s `/push`, and polls the endpoint for up to
+   `PUSH_WAIT_MS`. If it never comes online the call fails to the
+   ask-in-chat fallback.
+3. The pipeline sends an APNs HTTP/2 VoIP push (token-based auth, topic
+   `<bundle id>.voip`, priority 10, 30 s expiry) to the stored token.
+4. The app must report a CallKit call for every push, so it does so at once,
+   then re-registers over the LAN. Asterisk, already ringing for up to
+   `RING_TIMEOUT_S`, delivers the INVITE; the call is answered when the user
+   accepts in the native UI. A pushed call with no INVITE within 30 s, or a
+   second push during a call, is ended.
+5. The app sends its PushKit token and APNs environment to the pipeline's
+   `PUT /device` (LAN, bearer `SOFTPHONE_PASSWORD`), stored in a volume. The
+   pipeline holds the token and the `.p8` key rather than `mcp-server`: it is
+   long-lived, LAN-reachable, and has a volume, while `mcp-server` is a
+   per-session stdio process.
+
+Asterisk stays LAN-only: the push wakes the app, which registers over the
+home network, so the phone must be on it.
 
 ## Voice pipeline behaviour
 
@@ -164,7 +197,7 @@ in `startCall` or `pollForAnswer` cancels the call before it is thrown.
 in-flight calls, so concurrent calls and an interrupt during `startCall` are
 all hung up on shutdown.
 
-- `startCall` — `POST /calls` to the pipeline, then originate via ARI.
+- `startCall` — `POST /calls` to the pipeline, wake an offline phone (`POST /push`, then poll the ARI endpoint state for up to `PUSH_WAIT_MS`), then originate via ARI with `timeout=RING_TIMEOUT_S`.
 - `pollForAnswer` — `GET /calls/:id` on the pipeline, plus
   `GET /ari/channels/<call ID>` while `pending`; a 404 there (confirmed by a
   second status read) fails the call.
@@ -177,10 +210,9 @@ Configuration is env; names and defaults are in `src/config.ts`.
 - **Components.** `mcp-server`, the local stack, and the `ios/` soft-phone.
 - **Machine-agnostic.** Host-specific values are env, not code; the stack is
   not tied to the current development machine.
-- **Soft-phone.** The `ios/` app (Linphone SDK) is the soft-phone. It has no
-  CallKit or PushKit, so it rings only while foregrounded; background ringing
-  needs a VoIP push and a paid Apple Developer account. Third-party SIP apps
-  also work. SIP and RTP are unencrypted (no TLS or SRTP), so the phone and
+- **Soft-phone.** The `ios/` app (Linphone SDK, PushKit, CallKit) is the
+  soft-phone; background ringing needs a paid Apple Developer account.
+  Third-party SIP apps also work. SIP and RTP are unencrypted (no TLS or SRTP), so the phone and
   stack stay on a trusted LAN.
 - **Off-network reach.** LAN-only. A VPN (Tailscale or WireGuard) can bridge
   the phone when it is away from the home network without changing the design.

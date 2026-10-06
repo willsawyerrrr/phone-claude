@@ -14,6 +14,10 @@ Speaks a question over an Asterisk AudioSocket call and captures the spoken repl
 | `GET /calls/:id`         | `{callId, status: "pending" \| "answered" \| "failed", answer?, error?}`; `404` if unknown.                                                                      |
 | `POST /calls/:id/cancel` | Hangs up the call if in flight and marks it `failed` (`error: "Cancelled"`). Idempotent; `404` if unknown. A call that already has an outcome is left to finish. |
 | `GET /healthz`           | `{ok: true}`.                                                                                                                                                    |
+| `POST /push`             | Sends the VoIP push to the registered phone. `204`; `404` if no device; `503` if APNs is not configured; `502` if APNs rejects it.                               |
+| `GET /device`            | `{registered, environment?}`; never the token.                                                                                                                   |
+
+**Device HTTP** (`:8081`, `DEVICE_PORT`, published on `HOST_LAN_IP`): `PUT /device` with `{token, environment: "sandbox" \| "production"}` and `Authorization: Bearer <DEVICE_SECRET>` (the soft-phone password) stores the phone's PushKit token in `DEVICE_FILE` (`/data/device.json`, the `pipeline-data` volume). `204`; `400` if invalid; `401` if unauthorised.
 
 Call state is held in memory and dropped after `CALL_TTL_S` (1 hour); an expired call is `404`. The first terminal status is kept: a cancel that races a just-captured answer doesn't overwrite it.
 
@@ -42,6 +46,8 @@ All three fit in the 4 GB Docker Desktop VM on arm64 and amd64. Swap a model by 
 ## Configuration
 
 Environment variables, all optional (`docker-compose.yml` passes through all except `AUDIOSOCKET_PORT`, `HTTP_PORT`, `MODELS_DIR`, `WHISPER_MODEL` and `PIPER_VOICE`): `NO_INPUT_TIMEOUT_S` (15), `QUIET_PERIOD_S` (3), `MAX_REPLY_S` (60), `MAX_REPEATS` (3), `CALL_TTL_S` (3600), `VAD_THRESHOLD` (0.5), `AUDIOSOCKET_PORT` (9092), `HTTP_PORT` (8080), `MODELS_DIR` (`/models`), `WHISPER_MODEL` (`whisper-base.en`), `PIPER_VOICE` (`en_US-lessac-medium`).
+
+Push: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_FILE` (`/run/secrets/apns_key`), `APNS_TOPIC` (`dev.willsawyerrrr.phone-claude.voip`), `DEVICE_FILE` (`/data/device.json`), `DEVICE_PORT` (8081), `DEVICE_SECRET`.
 
 ## Tests
 

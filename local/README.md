@@ -40,7 +40,17 @@ Confirm registration with:
 docker compose exec asterisk asterisk -rx 'pjsip show contacts'
 ```
 
-The contact should be `Avail`. The `ios/` app rings only while foregrounded. For a third-party app, a locked or backgrounded phone only rings if the app has working push notifications; test that on the actual phone before relying on it.
+The contact should be `Avail`. The `ios/` app unregisters when backgrounded, so the contact is `Unavail` or absent until a VoIP push wakes it. For a third-party app, a locked or backgrounded phone only rings if the app has working push notifications; test that on the actual phone before relying on it.
+
+## Ringing a locked phone
+
+`mcp-server` pushes only when ARI reports the endpoint offline. The push wakes the `ios/` app, which re-registers over the LAN (Asterisk stays LAN-only) and answers the INVITE once the user accepts in the native call UI.
+
+- **Token delivery.** The app `PUT`s its PushKit token to `http://HOST_LAN_IP:DEVICE_PORT/device` with `Authorization: Bearer <SOFTPHONE_PASSWORD>`. The pipeline already runs as a long-lived LAN service with a volume, so the token endpoint and the sender live there rather than in the per-session `mcp-server`, and the key stays out of Claude Code's config. The token is kept in the `pipeline-data` volume and survives restarts.
+- **Sender.** `POST /push` on the pipeline (loopback) sends an APNs HTTP/2 VoIP push (topic `APNS_TOPIC`, priority 10, 30 s expiry) with token-based auth. It returns `404` with no registered device, `503` if APNs is not configured, and `502` if APNs rejects it; a rejected token is forgotten.
+- **Registration.** The endpoint's AOR expires registrations in 120 s by default (30–300 s) and qualifies every 15 s, so a phone that stopped refreshing shows offline within a couple of minutes.
+
+Set `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_KEY_PATH` (host path to the `.p8` key, see [`../ios/README.md`](../ios/README.md#apple-setup)). The key is mounted read-only into the container as the `pipeline` user, so it must be readable by others (`chmod 644`). Never commit it.
 
 ## Placing a test call
 

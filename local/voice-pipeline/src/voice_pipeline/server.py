@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import logging
 import uuid
 from collections.abc import Callable
@@ -7,7 +8,9 @@ from aiohttp import web
 
 from voice_pipeline.audiosocket import KIND_UUID, StreamChannel, read_frame
 from voice_pipeline.config import Settings
+from voice_pipeline.devices import DeviceStore, parse_device
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
+from voice_pipeline.push import ApnsPusher, NoDevice, NotConfigured, PushError
 from voice_pipeline.session import CallSession, Pace
 from voice_pipeline.store import CallStore
 
@@ -27,8 +30,18 @@ class Pipeline:
         stt: Transcriber,
         tts: Speaker,
         pace: Pace = asyncio.sleep,
+        devices: DeviceStore | None = None,
+        pusher: ApnsPusher | None = None,
     ) -> None:
         self.settings = settings
+        self.devices = devices or DeviceStore(settings.device_file)
+        self.pusher = pusher or ApnsPusher(
+            self.devices,
+            key_id=settings.apns_key_id,
+            team_id=settings.apns_team_id,
+            key_file=settings.apns_key_file,
+            topic=settings.apns_topic,
+        )
         self.store = CallStore(settings.call_ttl_s)
         self._vad_factory = vad_factory
         self._stt = stt
@@ -53,6 +66,7 @@ class Pipeline:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        await self.pusher.aclose()
 
     async def handle_audiosocket(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -104,9 +118,60 @@ class Pipeline:
                 web.post("/calls", self._register),
                 web.get("/calls/{call_id}", self._status),
                 web.post("/calls/{call_id}/cancel", self._cancel),
+                web.post("/push", self._push),
+                web.get("/device", self._device),
             ]
         )
         return app
+
+    def device_app(self) -> web.Application:
+        """The LAN-facing app, which only accepts device registration."""
+        app = web.Application()
+        app.add_routes([web.put("/device", self._register_device)])
+        return app
+
+    async def _push(self, _request: web.Request) -> web.Response:
+        try:
+            await self.pusher.send()
+        except NoDevice:
+            return web.json_response({"error": "No device registered"}, status=404)
+        except NotConfigured:
+            return web.json_response({"error": "APNs is not configured"}, status=503)
+        except PushError as e:
+            log.warning("push failed: %s", e.reason)
+            return web.json_response({"error": e.reason}, status=502)
+        return web.Response(status=204)
+
+    async def _device(self, _request: web.Request) -> web.Response:
+        device = self.devices.get()
+        if device is None:
+            return web.json_response({"registered": False})
+        return web.json_response(
+            {"registered": True, "environment": device.environment}
+        )
+
+    async def _register_device(self, request: web.Request) -> web.Response:
+        secret = self.settings.device_secret
+        scheme, _, presented = request.headers.get("Authorization", "").partition(" ")
+        if (
+            not secret
+            or scheme != "Bearer"
+            or not hmac.compare_digest(presented.encode(), secret.encode())
+        ):
+            return web.json_response({"error": "Unauthorized"}, status=401)
+        try:
+            body = await request.json()
+            device = parse_device(body["token"], body["environment"])
+        except (ValueError, KeyError, TypeError):
+            return web.json_response(
+                {
+                    "error": "Body must be {token: hex string, "
+                    "environment: sandbox|production}"
+                },
+                status=400,
+            )
+        self.devices.set(device)
+        return web.Response(status=204)
 
     async def _healthz(self, _request: web.Request) -> web.Response:
         return web.json_response({"ok": True})
