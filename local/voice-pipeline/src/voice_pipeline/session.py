@@ -24,13 +24,17 @@ NO_INPUT_ERROR = "No reply was heard"
 HANGUP_ERROR = "The call ended before an answer was captured"
 SESSION_ERROR = "The call failed unexpectedly"
 
-# Heuristic match for "please repeat that" rather than an actual answer. The
-# questions are short and answer-oriented (yes/no, a pick from a few
-# options), so a real answer containing these words is unlikely enough that a
-# keyword match beats real NLU.
+# Heuristic match for "please repeat that" rather than an actual answer. A
+# bare keyword only counts when it is the whole reply, since replies such as
+# "yes, run it again" or "don't repeat the migration" are real answers; longer
+# replies must contain a phrase that asks for the question.
 REPEAT_PATTERN = re.compile(
-    r"\b(repeat|again|come again|one more time|say (that|it) once more|"
-    r"what was that|didn'?t (catch|hear|get) that|pardon)\b",
+    r"^\W*(please\s+)?(repeat(\s+(that|it))?|again|pardon(\s+me)?|sorry|what|"
+    r"come\s+again|one\s+more\s+time|say\s+(that|it)\s+again)(\s+please)?\W*$"
+    r"|\b((can|could|would|will)\s+you\s+(please\s+)?(repeat|say\s+(that|it)\s+again)|"
+    r"say\s+(that|it)\s+(again|once\s+more)|repeat\s+the\s+question|"
+    r"what\s+(was|is)\s+(that|the\s+question)|"
+    r"didn'?t\s+(catch|hear|get)\s+that)\b",
     re.IGNORECASE,
 )
 
