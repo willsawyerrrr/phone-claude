@@ -53,6 +53,8 @@ class CallStore:
         return record
 
     def get(self, call_id: str) -> CallRecord | None:
+        """Returns the call, or `None` if it is unknown or has expired."""
+        self._prune()
         return self._calls.get(call_id)
 
     def answer(self, call_id: str, answer: str) -> bool:
