@@ -4,4 +4,4 @@ COPY templates /opt/asterisk-templates
 COPY render-config.sh /usr/local/bin/render-config.sh
 
 ENTRYPOINT ["/usr/local/bin/render-config.sh"]
-CMD ["/usr/sbin/asterisk", "-vvvdddf", "-T", "-W", "-U", "asterisk", "-p"]
+CMD ["/usr/sbin/asterisk", "-vvvf", "-T", "-W", "-U", "asterisk"]
