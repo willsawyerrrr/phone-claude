@@ -67,8 +67,8 @@ struct ContentView: View {
 
     private func register() {
         error = nil
-        config.save()
         do {
+            try config.save()
             try client.register(config)
         } catch {
             self.error = error.localizedDescription
