@@ -7,7 +7,9 @@ struct SIPConfig: Equatable {
     var username = "phone"
     var password = ""
 
-    var isComplete: Bool { !host.isEmpty && !username.isEmpty && !password.isEmpty }
+    var isComplete: Bool {
+        !host.isEmpty && (1...65535).contains(port) && !username.isEmpty && !password.isEmpty
+    }
     var identityURI: String { "sip:\(username)@\(host)" }
     var serverURI: String { "sip:\(host):\(port);transport=udp" }
 }
@@ -17,8 +19,9 @@ extension SIPConfig {
         static let host = "sip.host"
         static let port = "sip.port"
         static let username = "sip.username"
-        static let password = "sip.password"
     }
+
+    private static let passwordAccount = "sip.password"
 
     /// Reads the saved config; the password comes from the Keychain, the rest from `UserDefaults`.
     static func load() -> SIPConfig {
@@ -27,15 +30,20 @@ extension SIPConfig {
         config.host = defaults.string(forKey: Key.host) ?? config.host
         config.port = defaults.object(forKey: Key.port) as? Int ?? config.port
         config.username = defaults.string(forKey: Key.username) ?? config.username
-        config.password = Keychain.get(Key.password) ?? ""
+        config.password = Keychain.get(passwordAccount) ?? ""
         return config
     }
 
-    func save() {
+    /// Writes the config; an empty password removes the Keychain item.
+    func save() throws {
         let defaults = UserDefaults.standard
         defaults.set(host, forKey: Key.host)
         defaults.set(port, forKey: Key.port)
         defaults.set(username, forKey: Key.username)
-        Keychain.set(password, for: Key.password)
+        if password.isEmpty {
+            try Keychain.delete(Self.passwordAccount)
+        } else {
+            try Keychain.set(password, for: Self.passwordAccount)
+        }
     }
 }
