@@ -28,9 +28,12 @@ struct ContentView: View {
                         Button("Register", action: register)
                             .disabled(!config.isComplete)
                     } else {
-                        Button("Unregister", role: .destructive, action: client.unregister)
+                        Button(
+                            client.registration.isFailed ? "Retry" : "Unregister",
+                            role: client.registration.isFailed ? nil : .destructive,
+                            action: client.registration.isFailed ? register : client.unregister)
                     }
-                    if let error {
+                    if let error = error ?? client.error {
                         Text(error).foregroundStyle(.red)
                     }
                 }
