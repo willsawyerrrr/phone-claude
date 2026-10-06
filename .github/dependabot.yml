@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        update-types: [minor, patch]
+  - package-ecosystem: pip
+    directory: /local/voice-pipeline
+    schedule:
+      interval: weekly
+    groups:
+      pip:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directories:
+      - /local/asterisk
+      - /local/voice-pipeline
+    schedule:
+      interval: weekly
+    groups:
+      docker:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        update-types: [minor, patch]
