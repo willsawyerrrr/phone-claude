@@ -25,7 +25,7 @@ Published ports: SIP `SIP_PORT` (UDP and TCP), RTP `RTP_START`–`RTP_END` (UDP,
 
 ## Pairing the soft-phone
 
-Install a SIP app on the phone (Groundwire, Linphone, or Zoiper) and add an account:
+Install a SIP app on the phone (Groundwire, Linphone, Zoiper, or the [`ios/`](../ios/README.md) app) and add an account:
 
 - **Username / auth username:** `SOFTPHONE_USERNAME` (default `phone`)
 - **Password:** `SOFTPHONE_PASSWORD`
@@ -40,9 +40,7 @@ Confirm registration with:
 docker compose exec asterisk asterisk -rx 'pjsip show contacts'
 ```
 
-[`ios/`](../ios/README.md) is an alternative to these apps: a purpose-built iOS soft-phone that registers with the same account (foreground only).
-
-The contact should be `Avail`. A locked or backgrounded phone only rings if the app has working push notifications; test that on the actual phone before relying on it.
+The contact should be `Avail`. The `ios/` app rings only while foregrounded. For a third-party app, a locked or backgrounded phone only rings if the app has working push notifications; test that on the actual phone before relying on it.
 
 ## Placing a test call
 

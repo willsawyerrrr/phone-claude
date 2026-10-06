@@ -27,6 +27,17 @@ as the `SOFTPHONE_USERNAME` endpoint and answers calls, using the Linphone SDK
 for SIP and media. It is foreground only (no CallKit/PushKit). See
 `ios/README.md`.
 
+## Build and test
+
+- TypeScript: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`,
+  `pnpm format:check`.
+- Voice pipeline (`ruff` + `pytest`):
+  `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
+docker run --rm voice-pipeline-test`.
+- iOS: in `ios/`, `xcodegen generate`, then
+  `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude
+-destination 'platform=iOS Simulator,name=<simulator>,OS=latest'`.
+
 ## Local call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and
@@ -49,10 +60,7 @@ for SIP and media. It is foreground only (no CallKit/PushKit). See
    ARI channel (`DELETE /ari/channels/:callId`) and POSTs the pipeline's
    `/calls/:id/cancel`. Both are best-effort.
 
-`mcp-server` is configured by env vars (`mcp-server/src/config.ts`):
-`ARI_USERNAME` and `ARI_PASSWORD` (required), `ARI_URL` (default
-`http://localhost:8088`), `PIPELINE_URL` (default `http://localhost:8080`),
-`SIP_ENDPOINT` (default `phone`), `DIALPLAN_CONTEXT` (default `ask-by-phone`),
-`DIALPLAN_EXTENSION` (default `700`), `POLL_INTERVAL_MS` and `MAX_WAIT_MS` (positive numbers). The config is
-loaded and validated once at startup; an invalid one is reported to the
-caller through each `ask_by_phone` call's ask-in-chat fallback.
+`mcp-server` is configured by env vars; names and defaults are in
+`mcp-server/src/config.ts`. The config is loaded and validated once at
+startup; an invalid one is reported to the caller through each `ask_by_phone`
+call's ask-in-chat fallback.

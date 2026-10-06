@@ -35,6 +35,9 @@ Claude Code ──stdio──▶ mcp-server
 `mcp-server` runs as the plain local Node process Claude Code spawns over
 stdio; it is not part of the stack and reaches it over `localhost` ports.
 
+The soft-phone is any SIP app or the SwiftUI app in `ios/`, which registers as
+the same PJSIP endpoint and answers calls while foregrounded.
+
 ## The Compose stack
 
 Lives under `local/`. Two services on one Docker network:
@@ -58,7 +61,7 @@ Docker Desktop runs containers in a Linux VM, so host networking does not
 expose them to the LAN. Instead the stack uses published ports and tells
 Asterisk which address to advertise:
 
-- Publish SIP (`5060/udp`), ARI (`8088/tcp`), and a bounded RTP range
+- Publish SIP (`SIP_PORT`, default `5060`, UDP and TCP), ARI (`8088/tcp`), and a bounded RTP range
   (`10000-10099/udp`, matching `rtp.conf`).
 - Set `external_signaling_address` and `external_media_address` to
   `HOST_LAN_IP`, and `local_net` to loopback only (Docker presents LAN peers
@@ -73,7 +76,7 @@ Asterisk which address to advertise:
 - `voice-pipeline`'s ports (`8080`) are published to `localhost` only;
   AudioSocket (`9092`) is reachable only inside the Docker network.
 
-The soft-phone registers to `HOST_LAN_IP:5060` over Wi-Fi.
+The soft-phone registers to `HOST_LAN_IP:SIP_PORT` over Wi-Fi.
 
 ## Interface contract
 
@@ -109,7 +112,7 @@ The extension runs when the originated leg answers.
 `voice-pipeline` accepts Asterisk's AudioSocket TCP connection on `9092`.
 Audio is 8 kHz, 16-bit signed linear PCM, mono, in 20 ms frames. The
 connection's UUID is the call ID; a UUID with no registered prompt is
-rejected.
+rejected: the pipeline hangs up the connection.
 
 ### Pipeline HTTP API (`:8080`)
 
@@ -118,6 +121,7 @@ rejected.
 | `POST /calls`            | `{callId, question, context?}` registers a prompt; `201`.         |
 | `GET /calls/:id`         | `{status: "pending" \| "answered" \| "failed", answer?, error?}`. |
 | `POST /calls/:id/cancel` | Ends the call if in flight and marks it `failed`; idempotent.     |
+| `GET /healthz`           | `{ok: true}`.                                                     |
 
 Call state is held in memory for the life of the process; a call is dropped
 after a TTL.
@@ -151,14 +155,14 @@ no LLM stage: a call is one question and one reply.
 
 ## `mcp-server`
 
-The tool's name, input schema (`question`, `context`), chat-fallback message,
-and the wait, timeout, and cancel behaviour (`POLL_INTERVAL_MS`,
-`MAX_WAIT_MS`, `SIGINT`/`SIGTERM`) are fixed. `src/client.ts` implements its
-three operations against the stack. Every request carries a timeout, and a
-failure in `startCall` or `pollForAnswer` cancels the call before it is
-thrown. `src/index.ts` generates each call ID before the first request and
-tracks all in-flight calls, so concurrent calls and an interrupt during
-`startCall` are all hung up on shutdown.
+The tool takes `question` and optional `context`, and waits up to
+`MAX_WAIT_MS`, polling every `POLL_INTERVAL_MS`; on timeout or
+`SIGINT`/`SIGTERM` it cancels the call. `src/client.ts` implements its three
+operations against the stack. Every request carries a timeout, and a failure
+in `startCall` or `pollForAnswer` cancels the call before it is thrown.
+`src/index.ts` generates each call ID before the first request and tracks all
+in-flight calls, so concurrent calls and an interrupt during `startCall` are
+all hung up on shutdown.
 
 - `startCall` — `POST /calls` to the pipeline, then originate via ARI.
 - `pollForAnswer` — `GET /calls/:id` on the pipeline, plus
@@ -166,17 +170,18 @@ tracks all in-flight calls, so concurrent calls and an interrupt during
   second status read) fails the call.
 - `cancelCall` — hang up the ARI channel and `POST /calls/:id/cancel`.
 
-Configuration is env: ARI URL and credentials, pipeline URL, soft-phone
-endpoint.
+Configuration is env; names and defaults are in `src/config.ts`.
 
 ## Decisions and open items
 
-- **Components.** `mcp-server` and the local stack are the only components.
+- **Components.** `mcp-server`, the local stack, and the `ios/` soft-phone.
 - **Machine-agnostic.** Host-specific values are env, not code; the stack is
   not tied to the current development machine.
-- **Soft-phone.** Groundwire, Linphone, and Zoiper are candidates. The deciding
-  factor is ringing reliably when the phone is locked or the app is
-  backgrounded, so the chosen app is tested under those conditions.
+- **Soft-phone.** The `ios/` app (Linphone SDK) is the soft-phone. It has no
+  CallKit or PushKit, so it rings only while foregrounded; background ringing
+  needs a VoIP push and a paid Apple Developer account. Third-party SIP apps
+  also work. SIP and RTP are unencrypted (no TLS or SRTP), so the phone and
+  stack stay on a trusted LAN.
 - **Off-network reach.** LAN-only. A VPN (Tailscale or WireGuard) can bridge
   the phone when it is away from the home network without changing the design.
 - **Always-on host.** The stack needs a machine that is running when Claude

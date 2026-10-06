@@ -4,7 +4,7 @@ Speaks a question over an Asterisk AudioSocket call and captures the spoken repl
 
 ## Interface
 
-**AudioSocket** (`:9092`, inside the Docker network only). Asterisk connects when the call is answered. Audio is 8 kHz, 16-bit signed linear PCM, mono, 20 ms frames; the connection's UUID is the call ID. A UUID with no pending prompt is hung up on.
+**AudioSocket** (`:9092`, inside the Docker network only). Asterisk connects when the call is answered. Audio is 8 kHz, 16-bit signed linear PCM, mono, 20 ms frames; the connection's UUID is the call ID. A UUID with no pending prompt is rejected: the pipeline hangs up the connection.
 
 **HTTP** (`:8080`, published to loopback):
 

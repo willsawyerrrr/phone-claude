@@ -1,6 +1,6 @@
 # Phone Claude (iOS)
 
-A SwiftUI SIP soft-phone that registers to the local Asterisk stack (`../local/`) as its PJSIP endpoint and answers `ask_by_phone` calls. It replaces a third-party soft-phone (Groundwire, Linphone, Zoiper). SIP and media come from the [Linphone SDK](https://github.com/BelledonneCommunications/linphone-sdk-swift-ios) (AGPL-3.0, audio-only build), added as a Swift package.
+A SwiftUI SIP soft-phone that registers to the local Asterisk stack (`../local/`) as its PJSIP endpoint and answers `ask_by_phone` calls. SIP and media come from the [Linphone SDK](https://github.com/BelledonneCommunications/linphone-sdk-swift-ios) (AGPL-3.0, audio-only build), added as a Swift package.
 
 **Foreground only.** There is no CallKit or PushKit, so calls ring only while the app is open. The screen is kept awake while registered. Background wake-up needs a VoIP push and a paid Apple Developer account.
 
@@ -14,7 +14,7 @@ xcodegen generate
 open PhoneClaude.xcodeproj   # run on a simulator or device
 ```
 
-Unit tests: `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude -destination 'platform=iOS Simulator,name=<simulator>'`.
+Unit tests: `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude -destination 'platform=iOS Simulator,name=<simulator>,OS=latest'`.
 
 ## Pair with Asterisk
 
@@ -24,14 +24,16 @@ Enter the same values as for any soft-phone (see [`../local/README.md`](../local
 - **Username:** `SOFTPHONE_USERNAME` (default `phone`)
 - **Password:** `SOFTPHONE_PASSWORD`
 
-Signalling is UDP. The password is stored in the Keychain; the rest in `UserDefaults`. Allow Local Network access when prompted, or the phone can't reach Asterisk.
+Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. The password is stored in the Keychain; the rest in `UserDefaults`. Allow Local Network access when prompted, or the phone can't reach Asterisk.
 
 ## Layout
 
+- `PhoneClaudeApp.swift` — app entry point.
 - `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up. A failed registration is stopped and can be retried.
 - `CallTracker.swift` — tracks the single current call; a second incoming call is declined as busy.
 - `SIPConfig.swift`, `Keychain.swift` — connection settings and their persistence.
 - `ContentView.swift` — settings form, registration status, and answer/decline/hang-up controls.
+- `PhoneClaudeTests/` — unit tests (`SIPConfigTests.swift`, `CallTrackerTests.swift`).
 
 ## Simulator
 
