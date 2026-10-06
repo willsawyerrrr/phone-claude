@@ -37,7 +37,7 @@ All three fit in the 4 GB Docker Desktop VM on arm64 and amd64. Swap a model by 
 
 ## Configuration
 
-Environment variables, all optional: `NO_INPUT_TIMEOUT_S` (15), `QUIET_PERIOD_S` (3), `MAX_REPLY_S` (60), `MAX_REPEATS` (3), `CALL_TTL_S` (3600), `VAD_THRESHOLD` (0.5), `AUDIOSOCKET_PORT` (9092), `HTTP_PORT` (8080), `MODELS_DIR` (`/models`), `WHISPER_MODEL` (`whisper-base.en`), `PIPER_VOICE` (`en_US-lessac-medium`).
+Environment variables, all optional (`docker-compose.yml` passes through all except `AUDIOSOCKET_PORT`, `HTTP_PORT`, `MODELS_DIR`, `WHISPER_MODEL` and `PIPER_VOICE`): `NO_INPUT_TIMEOUT_S` (15), `QUIET_PERIOD_S` (3), `MAX_REPLY_S` (60), `MAX_REPEATS` (3), `CALL_TTL_S` (3600), `VAD_THRESHOLD` (0.5), `AUDIOSOCKET_PORT` (9092), `HTTP_PORT` (8080), `MODELS_DIR` (`/models`), `WHISPER_MODEL` (`whisper-base.en`), `PIPER_VOICE` (`en_US-lessac-medium`).
 
 ## Tests
 
