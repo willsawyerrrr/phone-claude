@@ -15,7 +15,7 @@ Speaks a question over an Asterisk AudioSocket call and captures the spoken repl
 | `POST /calls/:id/cancel` | Hangs up the call if in flight and marks it `failed` (`error: "Cancelled"`). Idempotent; `404` if unknown. A call that already has an outcome is left to finish. |
 | `GET /healthz`           | `{ok: true}`.                                                                                                                                                    |
 
-Call state is held in memory and dropped after `CALL_TTL_S` (1 hour). The first terminal status is kept: a cancel that races a just-captured answer doesn't overwrite it.
+Call state is held in memory and dropped after `CALL_TTL_S` (1 hour); an expired call is `404`. The first terminal status is kept: a cancel that races a just-captured answer doesn't overwrite it.
 
 ## Call behaviour
 

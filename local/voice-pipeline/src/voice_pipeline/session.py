@@ -5,7 +5,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from enum import Enum
 
-from voice_pipeline.audiosocket import KIND_AUDIO, Channel
+from voice_pipeline.audiosocket import KIND_AUDIO, KIND_ERROR, KIND_HANGUP, Channel
 from voice_pipeline.config import BYTES_PER_SECOND, FRAME_BYTES, Settings
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
 from voice_pipeline.store import CallRecord, CallStore
@@ -160,14 +160,13 @@ class CallSession:
         """Feeds inbound audio to the inbox and notes when the caller leaves."""
         while True:
             frame = await self._channel.recv()
-            if frame is None or frame.kind != KIND_AUDIO:
-                if frame is None or frame.kind in (0x00, 0xFF):
-                    self._hung_up.set()
-                    self._outbound_flushed.set()
-                    self._inbox.put_nowait(None)
-                    return
-                continue
-            self._inbox.put_nowait(frame.payload)
+            if frame is None or frame.kind in (KIND_HANGUP, KIND_ERROR):
+                self._hung_up.set()
+                self._outbound_flushed.set()
+                self._inbox.put_nowait(None)
+                return
+            if frame.kind == KIND_AUDIO:
+                self._inbox.put_nowait(frame.payload)
 
     async def _speak(self, text: str) -> None:
         pcm = await asyncio.to_thread(self._tts.synthesize, text)

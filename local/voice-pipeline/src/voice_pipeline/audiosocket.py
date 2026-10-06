@@ -10,7 +10,6 @@ from typing import Protocol
 
 KIND_HANGUP = 0x00
 KIND_UUID = 0x01
-KIND_DTMF = 0x03
 KIND_AUDIO = 0x10
 KIND_ERROR = 0xFF
 
