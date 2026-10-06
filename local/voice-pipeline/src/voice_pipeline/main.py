@@ -31,10 +31,14 @@ async def serve(settings: Settings) -> None:
     runner = web.AppRunner(pipeline.app(), access_log=None)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", settings.http_port).start()
+    device_runner = web.AppRunner(pipeline.device_app(), access_log=None)
+    await device_runner.setup()
+    await web.TCPSite(device_runner, "0.0.0.0", settings.device_port).start()
     logging.getLogger(__name__).info(
-        "listening: audiosocket %d, http %d",
+        "listening: audiosocket %d, http %d, device %d",
         settings.audiosocket_port,
         settings.http_port,
+        settings.device_port,
     )
 
     await stop.wait()
@@ -42,6 +46,7 @@ async def serve(settings: Settings) -> None:
     audiosocket.close()
     await pipeline.shutdown()
     await runner.cleanup()
+    await device_runner.cleanup()
 
 
 def main() -> None:

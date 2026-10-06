@@ -5,7 +5,9 @@ description = "Speaks a question over an Asterisk AudioSocket call and captures 
 requires-python = ">=3.12"
 dependencies = [
   "aiohttp>=3.10",
+  "cryptography>=43",
   "faster-whisper>=1.1",
+  "httpx[http2]>=0.27",
   "numpy>=2",
   "onnxruntime>=1.20",
   "piper-tts>=1.3",

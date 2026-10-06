@@ -27,9 +27,10 @@ CMD ["sh", "-c", "ruff check . && ruff format --check . && pytest"]
 
 FROM base AS runtime
 COPY --from=models /models /models
-RUN useradd --system --no-create-home pipeline
+RUN useradd --system --no-create-home pipeline \
+    && mkdir /data && chown pipeline /data
 USER pipeline
-EXPOSE 8080 9092
+EXPOSE 8080 8081 9092
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s \
     CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"
 CMD ["python", "-m", "voice_pipeline"]
