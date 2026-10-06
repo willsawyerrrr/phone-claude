@@ -73,6 +73,11 @@ class CallStore:
         record.error = error
         return True
 
+    def fail_pending(self, error: str) -> None:
+        """Fails every call that is still pending."""
+        for call_id in list(self._calls):
+            self.fail(call_id, error)
+
     def _prune(self) -> None:
         now = time.monotonic()
         expired = [

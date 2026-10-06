@@ -25,6 +25,8 @@ Call state is held in memory and dropped after `CALL_TTL_S` (1 hour); an expired
 4. **Repeat.** A reply that is just `again`, `pardon`, `repeat`, or similar, or that asks for the question (`can you repeat that`, `say that again`, `what was the question`), is not recorded; the question is spoken again as `One more time. …`, up to `MAX_REPEATS` times.
 5. **Outcome.** A reply sets `answered` and the pipeline says goodbye. Nothing said within `NO_INPUT_TIMEOUT_S` of a prompt, or the caller hanging up first, sets `failed`. So does an unexpected error in the call (`error: "The call failed unexpectedly"`). A second audio connection for a call already in progress is hung up on.
 
+On `SIGTERM` or `SIGINT` the pipeline stops accepting audio connections, hangs up every call in progress and sets every `pending` call to `failed` (`error: "The pipeline shut down"`). The compose service runs with `init: true` so the signal reaches it.
+
 ## Models
 
 | Stage | Model                                                                       | Why                                                                                                                |

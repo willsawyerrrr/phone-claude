@@ -35,6 +35,7 @@ services:
     build:
       context: ./voice-pipeline
       target: runtime
+    init: true
     restart: unless-stopped
     environment:
       NO_INPUT_TIMEOUT_S: ${NO_INPUT_TIMEOUT_S:-15}
