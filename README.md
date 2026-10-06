@@ -64,8 +64,8 @@ or via a project `.mcp.json`:
 | `SIP_ENDPOINT`       | `phone`                 | PJSIP endpoint name of the soft-phone to ring         |
 | `DIALPLAN_CONTEXT`   | `ask-by-phone`          | Dialplan context the answered call continues in       |
 | `DIALPLAN_EXTENSION` | `700`                   | Dialplan extension that hands the call to AudioSocket |
-| `POLL_INTERVAL_MS`   | `3000`                  | How often to poll the pipeline for the answer         |
-| `MAX_WAIT_MS`        | `600000`                | How long to wait before hanging up and giving up      |
+| `POLL_INTERVAL_MS`   | `3000`                  | How often to poll the pipeline (positive number)      |
+| `MAX_WAIT_MS`        | `600000`                | How long to wait before giving up (positive number)   |
 
 ## Development
 

@@ -62,4 +62,19 @@ describe("loadConfig", () => {
     expect(() => loadConfig({})).toThrow(/ARI_USERNAME/);
     expect(() => loadConfig({ ARI_USERNAME: "u" })).toThrow(/ARI_PASSWORD/);
   });
+
+  it.each(["POLL_INTERVAL_MS", "MAX_WAIT_MS"])(
+    "rejects a non-positive or non-numeric %s",
+    (name) => {
+      for (const value of ["-1", "0", "abc", "Infinity", "NaN"]) {
+        expect(() => loadConfig({ ...baseEnv, [name]: value })).toThrow(
+          new RegExp(name),
+        );
+      }
+    },
+  );
+
+  it("accepts fractional positive durations", () => {
+    expect(loadConfig({ ...baseEnv, MAX_WAIT_MS: "1.5" }).maxWaitMs).toBe(1.5);
+  });
 });

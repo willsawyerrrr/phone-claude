@@ -30,14 +30,32 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sipEndpoint: env.SIP_ENDPOINT || DEFAULT_SIP_ENDPOINT,
     dialplanContext: env.DIALPLAN_CONTEXT || DEFAULT_DIALPLAN_CONTEXT,
     dialplanExtension: env.DIALPLAN_EXTENSION || DEFAULT_DIALPLAN_EXTENSION,
-    pollIntervalMs: Number(env.POLL_INTERVAL_MS) || DEFAULT_POLL_INTERVAL_MS,
-    maxWaitMs: Number(env.MAX_WAIT_MS) || DEFAULT_MAX_WAIT_MS,
+    pollIntervalMs: positiveNumber(
+      env,
+      "POLL_INTERVAL_MS",
+      DEFAULT_POLL_INTERVAL_MS,
+    ),
+    maxWaitMs: positiveNumber(env, "MAX_WAIT_MS", DEFAULT_MAX_WAIT_MS),
   };
 }
 
 function requireEnv(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
   if (!value) throw new Error(`Missing required env var: ${name}`);
+  return value;
+}
+
+function positiveNumber(
+  env: NodeJS.ProcessEnv,
+  name: string,
+  fallback: number,
+): number {
+  const raw = env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number, got: ${raw}`);
+  }
   return value;
 }
 
