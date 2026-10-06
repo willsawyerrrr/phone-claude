@@ -35,3 +35,17 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build --target test -t voice-pipeline-test local/voice-pipeline
       - run: docker run --rm voice-pipeline-test
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+        working-directory: ios
+      - name: Test
+        working-directory: ios
+        run: |
+          udid=$(xcrun simctl list devices available | grep -m1 'iPhone' | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}')
+          xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude \
+            -destination "platform=iOS Simulator,id=$udid"
