@@ -72,6 +72,12 @@ export async function startCall(
  * calls take minutes and the MCP stdio transport has no server-push
  * mechanism, so a short interval poll is the simplest way to wait without
  * blocking the process on an open socket.
+ *
+ * Nothing tells the pipeline when the dial itself fails (busy, declined,
+ * unreachable), so its record stays `pending`. While `pending`, each poll
+ * also checks the ARI channel: a missing channel means the call is over, so
+ * after re-reading the status once to rule out a call that just completed,
+ * the call is reported as failed rather than waited on until `maxWaitMs`.
  */
 export async function pollForAnswer(
   config: Config,
@@ -81,15 +87,17 @@ export async function pollForAnswer(
 
   try {
     while (Date.now() < deadline) {
-      const response = await fetch(`${config.pipelineUrl}/calls/${callId}`, {
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+      let status = await fetchCallStatus(config, callId);
 
-      if (!response.ok) {
-        throw new Error(`Failed to poll call status (${response.status})`);
+      if (
+        status.status === "pending" &&
+        (await channelIsGone(config, callId))
+      ) {
+        status = await fetchCallStatus(config, callId);
+        if (status.status === "pending") {
+          throw new Error("The phone was busy, declined, or did not answer");
+        }
       }
-
-      const status = (await response.json()) as CallStatusResponse;
 
       if (status.status === "answered") {
         return status.answer ?? "";
@@ -107,6 +115,36 @@ export async function pollForAnswer(
   } catch (error) {
     await cancelCall(config, callId);
     throw error;
+  }
+}
+
+async function fetchCallStatus(
+  config: Config,
+  callId: string,
+): Promise<CallStatusResponse> {
+  const response = await fetch(`${config.pipelineUrl}/calls/${callId}`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to poll call status (${response.status})`);
+  }
+  return (await response.json()) as CallStatusResponse;
+}
+
+/**
+ * Whether ARI reports the call's channel as gone (a 404). Any other outcome,
+ * including an unreachable ARI, counts as "not known to be gone" so a
+ * transient ARI problem never fails a live call.
+ */
+async function channelIsGone(config: Config, callId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${config.ariUrl}/ari/channels/${callId}`, {
+      headers: { Authorization: ariAuthorization(config) },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    return response.status === 404;
+  } catch {
+    return false;
   }
 }
 

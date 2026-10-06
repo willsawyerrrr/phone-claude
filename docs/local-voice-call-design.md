@@ -24,7 +24,10 @@ Claude Code ──stdio──▶ mcp-server
 4. `voice-pipeline` speaks the question, listens for the reply, and stores the
    transcript.
 5. `mcp-server` polls `voice-pipeline`, sees the terminal status, and returns
-   the answer (or a failure message) as the tool result.
+   the answer (or a failure message) as the tool result. While the status is
+   `pending` it also checks the ARI channel; a missing channel (busy,
+   declined, or unreachable phone) fails the call without waiting out
+   `MAX_WAIT_MS`.
 6. If starting or polling the call fails (including a request timing out),
    on timeout, or on `SIGINT`/`SIGTERM`, `mcp-server` hangs up via ARI and
    cancels the call in `voice-pipeline`.
@@ -158,7 +161,9 @@ tracks all in-flight calls, so concurrent calls and an interrupt during
 `startCall` are all hung up on shutdown.
 
 - `startCall` — `POST /calls` to the pipeline, then originate via ARI.
-- `pollForAnswer` — `GET /calls/:id` on the pipeline.
+- `pollForAnswer` — `GET /calls/:id` on the pipeline, plus
+  `GET /ari/channels/<call ID>` while `pending`; a 404 there (confirmed by a
+  second status read) fails the call.
 - `cancelCall` — hang up the ARI channel and `POST /calls/:id/cancel`.
 
 Configuration is env: ARI URL and credentials, pipeline URL, soft-phone

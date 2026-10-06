@@ -40,7 +40,9 @@ for SIP and media. It is foreground only (no CallKit/PushKit). See
    place when the phone answers.
 3. `mcp-server` polls the pipeline's `GET /calls/:id` every few seconds (see
    `mcp-server/src/client.ts` for why polling rather than a long-lived
-   connection) until the status is `answered` or `failed`.
+   connection) until the status is `answered` or `failed`. While the status is `pending`
+   it also checks `GET /ari/channels/:callId`; a 404 means the dial ended
+   (busy, declined, unreachable) and fails the call immediately.
 4. If starting or polling the call fails (every request has a timeout), the
    poll times out, or the process is interrupted (`SIGINT`/`SIGTERM`) while
    any call is in flight (including one still starting), `mcp-server` hangs up the
