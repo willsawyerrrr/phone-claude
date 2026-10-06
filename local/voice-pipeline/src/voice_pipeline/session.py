@@ -22,6 +22,7 @@ GOODBYE = "Got it, thanks. Goodbye."
 NO_INPUT_GOODBYE = "Sorry, I didn't catch that. Goodbye."
 NO_INPUT_ERROR = "No reply was heard"
 HANGUP_ERROR = "The call ended before an answer was captured"
+SESSION_ERROR = "The call failed unexpectedly"
 
 # Heuristic match for "please repeat that" rather than an actual answer. The
 # questions are short and answer-oriented (yes/no, a pick from a few
@@ -99,15 +100,32 @@ class CallSession:
             asyncio.create_task(self._pump()),
             asyncio.create_task(self._stream_outbound()),
         ]
+        for task in background:
+            task.add_done_callback(self._on_background_done)
         try:
             if self._record.status == "pending":
                 await self._converse()
+        except Exception:
+            log.exception("call %s crashed", call_id)
+            self._store.fail(call_id, SESSION_ERROR)
         finally:
             for task in background:
                 task.cancel()
             await asyncio.gather(*background, return_exceptions=True)
             await asyncio.shield(self._end_call())
         log.info("call %s ended: %s", call_id, self._record.status)
+
+    def _on_background_done(self, task: asyncio.Task) -> None:
+        """Fails the call and stops waiting on the caller if a background task
+        crashes."""
+        if task.cancelled() or task.exception() is None:
+            return
+        call_id = self._record.call_id
+        log.error("call %s crashed", call_id, exc_info=task.exception())
+        self._store.fail(call_id, SESSION_ERROR)
+        self._hung_up.set()
+        self._outbound_flushed.set()
+        self._inbox.put_nowait(None)
 
     async def _converse(self) -> None:
         call_id = self._record.call_id
