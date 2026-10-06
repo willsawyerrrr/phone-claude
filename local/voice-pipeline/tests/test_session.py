@@ -299,3 +299,65 @@ async def test_audio_is_sent_in_whole_frames_at_real_time_pace(settings):
     assert {len(frame) for frame in channel.sent_audio} == {320}
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
+
+
+class RaisingStt(FakeStt):
+    def transcribe(self, pcm: bytes) -> str:
+        raise RuntimeError("stt crashed")
+
+
+class RaisingTts(FakeTts):
+    def synthesize(self, text: str) -> bytes:
+        raise RuntimeError("tts crashed")
+
+
+async def test_a_transcription_crash_fails_the_call(settings):
+    channel = FakeChannel(talk(0.4) + quiet(1.0))
+    session, store, _ = make_session(channel, RaisingStt(), settings)
+
+    await session.run()
+
+    assert store.get(CALL_ID).status == "failed"
+    assert store.get(CALL_ID).error == "The call failed unexpectedly"
+    assert channel.hung_up and channel.closed
+
+
+async def test_a_synthesis_crash_fails_the_call(settings):
+    channel = FakeChannel()
+    session, store, _ = make_session(channel, FakeStt(), settings)
+    session._tts = RaisingTts()
+
+    await session.run()
+
+    assert store.get(CALL_ID).error == "The call failed unexpectedly"
+    assert channel.hung_up
+
+
+async def test_a_receive_crash_fails_the_call_promptly(settings):
+    channel = FakeChannel()
+
+    async def recv():
+        raise RuntimeError("socket crashed")
+
+    channel.recv = recv
+    session, store, _ = make_session(channel, FakeStt(), settings)
+
+    await asyncio.wait_for(session.run(), 0.5)
+
+    assert store.get(CALL_ID).error == "The call failed unexpectedly"
+    assert channel.hung_up
+
+
+async def test_a_send_crash_fails_the_call_promptly(settings):
+    channel = FakeChannel()
+
+    async def send_audio(pcm):
+        raise RuntimeError("socket crashed")
+
+    channel.send_audio = send_audio
+    session, store, _ = make_session(channel, FakeStt(), settings)
+
+    await asyncio.wait_for(session.run(), 0.5)
+
+    assert store.get(CALL_ID).error == "The call failed unexpectedly"
+    assert channel.hung_up

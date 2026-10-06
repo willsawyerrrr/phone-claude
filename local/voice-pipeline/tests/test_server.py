@@ -180,3 +180,33 @@ async def test_the_caller_hanging_up_fails_the_call(http, audiosocket_port):
     body = await (await http.get(f"/calls/{CALL_ID}")).json()
     assert body["status"] == "failed"
     assert body["error"] == "The call ended before an answer was captured"
+
+
+async def test_cancelling_an_answered_call_does_not_cut_off_its_session(pipeline):
+    record = pipeline.store.register(CALL_ID, "Ship it?", None)
+    pipeline.store.answer(CALL_ID, "yes")
+    session = asyncio.create_task(asyncio.sleep(10))
+    pipeline._sessions[CALL_ID] = session
+    await asyncio.sleep(0)
+
+    assert pipeline.cancel(CALL_ID) is False
+
+    await asyncio.sleep(0)
+    assert not session.cancelled()
+    assert record.status == "answered"
+    session.cancel()
+
+
+async def test_a_second_connection_for_a_call_is_rejected(http, audiosocket_port):
+    await register(http)
+    first = await FakeAsterisk.connect(audiosocket_port)
+    await first.send_audio([SILENCE])
+    await asyncio.sleep(0.05)
+
+    second = await FakeAsterisk.connect(audiosocket_port)
+
+    assert await asyncio.wait_for(second.read_until_hangup(), 2) == []
+    await http.post(f"/calls/{CALL_ID}/cancel")
+    await asyncio.wait_for(first.read_until_hangup(), 2)
+    body = await (await http.get(f"/calls/{CALL_ID}")).json()
+    assert body == {"callId": CALL_ID, "status": "failed", "error": "Cancelled"}
