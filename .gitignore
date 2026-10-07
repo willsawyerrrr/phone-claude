@@ -17,3 +17,4 @@ DerivedData/
 .swiftpm/
 ios/PhoneClaude/PhoneClaude.entitlements
 ios/PhoneClaude/Info.plist
+ios/build/
