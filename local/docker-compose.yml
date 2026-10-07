@@ -44,5 +44,21 @@ services:
       MAX_REPEATS: ${MAX_REPEATS:-3}
       CALL_TTL_S: ${CALL_TTL_S:-3600}
       VAD_THRESHOLD: ${VAD_THRESHOLD:-0.5}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      APNS_TOPIC: ${APNS_TOPIC:-dev.willsawyerrrr.phone-claude.voip}
+      DEVICE_SECRET: ${SOFTPHONE_PASSWORD:?Set SOFTPHONE_PASSWORD}
+    secrets:
+      - apns_key
+    volumes:
+      - pipeline-data:/data
     ports:
       - "127.0.0.1:${PIPELINE_PORT:-8080}:8080"
+      - "${HOST_LAN_IP:?Set HOST_LAN_IP to this machine's LAN IP}:${DEVICE_PORT:-8081}:8081"
+
+secrets:
+  apns_key:
+    file: ${APNS_KEY_PATH:-/dev/null}
+
+volumes:
+  pipeline-data:

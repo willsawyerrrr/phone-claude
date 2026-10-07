@@ -61,6 +61,13 @@ function json(response: ServerResponse, status: number, body: unknown): void {
 
 const okHandler: Handler = (_request, response) => json(response, 200, {});
 
+const onlineAri: Handler = (request, response) =>
+  json(
+    response,
+    200,
+    request.path.startsWith("/ari/endpoints/") ? { state: "online" } : {},
+  );
+
 function failWith(status: number, body = ""): Handler {
   return (_request, response) => {
     response.writeHead(status);
@@ -75,7 +82,7 @@ describe("client", () => {
 
   async function startServers(
     pipelineHandler: Handler = okHandler,
-    ariHandler: Handler = okHandler,
+    ariHandler: Handler = onlineAri,
   ): Promise<void> {
     pipeline = await startFakeServer(pipelineHandler);
     ari = await startFakeServer(ariHandler);
@@ -89,6 +96,8 @@ describe("client", () => {
       dialplanExtension: "700",
       pollIntervalMs: 0,
       maxWaitMs: 200,
+      pushWaitMs: 200,
+      ringTimeoutS: 60,
     };
   }
 
@@ -122,7 +131,7 @@ describe("client", () => {
         context: "Staging is green",
       });
 
-      const [originate] = ari.requests;
+      const originate = ari.requests.find((r) => r.method === "POST");
       const url = new URL(originate!.path, "http://ari");
       expect(originate!.method).toBe("POST");
       expect(url.pathname).toBe("/ari/channels");
@@ -132,6 +141,7 @@ describe("client", () => {
         extension: "700",
         priority: "1",
         channelId: callId,
+        timeout: "60",
       });
       expect(JSON.parse(originate!.body)).toEqual({
         variables: { CALL_ID: callId },
@@ -148,9 +158,9 @@ describe("client", () => {
           order.push("pipeline");
           json(response, 200, {});
         },
-        (_request, response) => {
-          order.push("ari");
-          json(response, 200, {});
+        (request, response) => {
+          if (request.method === "POST") order.push("ari");
+          onlineAri(request, response);
         },
       );
 
@@ -209,8 +219,162 @@ describe("client", () => {
       );
     });
 
+    it("originates without pushing when the endpoint is online", async () => {
+      await startCall(config, callId, "Deploy?");
+
+      expect(pipeline.requests.map((r) => r.path)).toEqual(["/calls"]);
+      expect(ari.requests.map((r) => `${r.method} ${r.path}`)).toEqual([
+        "GET /ari/endpoints/PJSIP/phone",
+        expect.stringMatching(/^POST \/ari\/channels\?/),
+      ]);
+      expect(ari.requests[0]!.headers.authorization).toMatch(/^Basic /);
+    });
+
+    it("pushes, waits for the endpoint to come online, then originates", async () => {
+      let checks = 0;
+      await restartServers(okHandler, (request, response) => {
+        if (request.path.startsWith("/ari/endpoints/")) {
+          checks += 1;
+          return json(response, 200, {
+            state: checks < 3 ? "offline" : "online",
+          });
+        }
+        json(response, 200, {});
+      });
+      config.pushWaitMs = 10_000;
+
+      await startCall(config, callId, "Deploy?");
+
+      expect(pipeline.requests.map((r) => `${r.method} ${r.path}`)).toEqual([
+        "POST /calls",
+        "POST /push",
+      ]);
+      expect(checks).toBe(3);
+      expect(ari.requests.at(-1)).toMatchObject({ method: "POST" });
+      expect(ari.requests.some((r) => r.method === "DELETE")).toBe(false);
+    });
+
+    it("treats an ARI error while checking the endpoint as offline", async () => {
+      let checks = 0;
+      await restartServers(okHandler, (request, response) => {
+        if (request.path.startsWith("/ari/endpoints/")) {
+          checks += 1;
+          return checks < 2
+            ? failWith(500)(request, response)
+            : json(response, 200, { state: "online" });
+        }
+        json(response, 200, {});
+      });
+      config.pushWaitMs = 10_000;
+
+      await startCall(config, callId, "Deploy?");
+
+      expect(pipeline.requests).toContainEqual(
+        expect.objectContaining({ path: "/push" }),
+      );
+      expect(ari.requests.at(-1)).toMatchObject({ method: "POST" });
+    });
+
+    it("hangs up and throws when the endpoint never comes online within pushWaitMs", async () => {
+      await restartServers(okHandler, (request, response) =>
+        json(
+          response,
+          200,
+          request.path.startsWith("/ari/endpoints/")
+            ? { state: "offline" }
+            : {},
+        ),
+      );
+      config.pushWaitMs = 300;
+
+      const started = Date.now();
+      await expect(startCall(config, callId, "Deploy?")).rejects.toThrow(
+        /The phone did not come online/,
+      );
+
+      expect(Date.now() - started).toBeLessThan(2_000);
+      expect(ari.requests.some((r) => r.method === "POST")).toBe(false);
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({
+          method: "DELETE",
+          path: `/ari/channels/${callId}`,
+        }),
+      );
+      expect(pipeline.requests).toContainEqual(
+        expect.objectContaining({ path: `/calls/${callId}/cancel` }),
+      );
+    });
+
+    it.each([404, 503, 502])(
+      "hangs up and throws when the push fails with %i",
+      async (status) => {
+        await restartServers(
+          (request, response) =>
+            request.path === "/push"
+              ? json(response, status, { error: "nope" })
+              : json(response, 200, {}),
+          (request, response) =>
+            json(
+              response,
+              200,
+              request.path.startsWith("/ari/endpoints/")
+                ? { state: "offline" }
+                : {},
+            ),
+        );
+
+        await expect(startCall(config, callId, "Deploy?")).rejects.toThrow(
+          new RegExp(`\\(${status}\\): nope`),
+        );
+
+        expect(ari.requests.some((r) => r.method === "POST")).toBe(false);
+        expect(ari.requests).toContainEqual(
+          expect.objectContaining({ method: "DELETE" }),
+        );
+        expect(pipeline.requests).toContainEqual(
+          expect.objectContaining({ path: `/calls/${callId}/cancel` }),
+        );
+      },
+    );
+
+    it("hangs up and throws when the push fails at the network", async () => {
+      await restartServers(okHandler, (request, response) =>
+        json(
+          response,
+          200,
+          request.path.startsWith("/ari/endpoints/")
+            ? { state: "offline" }
+            : {},
+        ),
+      );
+      const pipelineUrl = config.pipelineUrl;
+      config.pipelineUrl = "http://127.0.0.1:1";
+
+      await expect(startCall(config, callId, "Deploy?")).rejects.toThrow();
+
+      config.pipelineUrl = pipelineUrl;
+      expect(ari.requests).toContainEqual(
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+
+    it("rings for the configured ring timeout", async () => {
+      config.ringTimeoutS = 90;
+
+      await startCall(config, callId, "Deploy?");
+
+      const originate = ari.requests.find((r) => r.method === "POST");
+      expect(
+        new URL(originate!.path, "http://ari").searchParams.get("timeout"),
+      ).toBe("90");
+    });
+
     it("cancels the registered prompt and throws when ARI rejects the originate", async () => {
-      await restartServers(okHandler, failWith(400, "no such endpoint"));
+      await restartServers(okHandler, (request, response) =>
+        request.method === "POST"
+          ? failWith(400, "no such endpoint")(request, response)
+          : onlineAri(request, response),
+      );
 
       await expect(startCall(config, callId, "Deploy?")).rejects.toThrow(
         /Failed to originate call \(400\): no such endpoint/,

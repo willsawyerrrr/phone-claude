@@ -15,7 +15,10 @@ one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
 `mcp-server`'s `SIP_ENDPOINT`), ARI on port 8088, and the `ask-by-phone`
 context whose extension `700` streams the answered call to AudioSocket at
 `voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. The
-`voice-pipeline` service (`local/voice-pipeline/`, Python) speaks the question
+`voice-pipeline` service (`local/voice-pipeline/`, Python) also stores the
+phone's push token (`PUT /device` on the LAN port `DEVICE_PORT`, bearer
+`SOFTPHONE_PASSWORD`, persisted in the `pipeline-data` volume) and sends the
+APNs VoIP push (`POST /push`, loopback). It speaks the question
 with local TTS, listens with local VAD + STT, and exposes the `/calls` HTTP
 API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. See `local/README.md` and
@@ -24,8 +27,11 @@ Asterisk drops a quiet AudioSocket connection. See `local/README.md` and
 `ios/` is a SwiftUI soft-phone (not a pnpm package; the Xcode project is
 generated from `ios/project.yml` with XcodeGen) that registers to `asterisk`
 as the `SOFTPHONE_USERNAME` endpoint and answers calls, using the Linphone SDK
-for SIP and media. It is foreground only (no CallKit/PushKit). See
-`ios/README.md`.
+for SIP and media. It rings from the lock screen: the app stops its SIP client in
+the background, so Asterisk sees the endpoint offline, and a PushKit VoIP
+push wakes it; every push is reported to CallKit at once, then the app
+re-registers over the LAN and answers the INVITE when the user accepts. It
+sends its PushKit token to the pipeline's device endpoint. See `ios/README.md`.
 
 ## Build and test
 
@@ -49,10 +55,13 @@ docker run --rm voice-pipeline-test`.
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and
    optional context).
 2. `mcp-server` generates a UUID `callId` (AudioSocket keys the audio stream
-   by a UUID), POSTs `{callId, question, context}` to the voice pipeline's
-   `/calls`, then originates the call through Asterisk's ARI
+   by a UUID) and POSTs `{callId, question, context}` to the voice pipeline's
+   `/calls`. If ARI reports the endpoint (`GET /ari/endpoints/PJSIP/$SIP_ENDPOINT`)
+   not `online`, it POSTs the pipeline's `/push` and polls the endpoint for up
+   to `PUSH_WAIT_MS`; if it never comes online the call fails. It then
+   originates the call through Asterisk's ARI
    (`POST /ari/channels`, endpoint `PJSIP/$SIP_ENDPOINT`, dialplan
-   `$DIALPLAN_CONTEXT`/`$DIALPLAN_EXTENSION`, `channelId=callId`, channel
+   `$DIALPLAN_CONTEXT`/`$DIALPLAN_EXTENSION`, `channelId=callId`, `timeout=$RING_TIMEOUT_S`, channel
    variable `CALL_ID=callId`). The prompt is registered first so it's in
    place when the phone answers.
 3. `mcp-server` polls the pipeline's `GET /calls/:id` every few seconds (see

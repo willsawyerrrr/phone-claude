@@ -23,6 +23,14 @@ class Settings:
     models_dir: str = "/models"
     whisper_model: str = "whisper-base.en"
     piper_voice: str = "en_US-lessac-medium"
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_key_file: str = "/run/secrets/apns_key"
+    apns_topic: str = "dev.willsawyerrrr.phone-claude.voip"
+    device_file: str = "/data/device.json"
+    device_port: int = 8081
+    # Bearer token the soft-phone presents to register its push token.
+    device_secret: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -40,4 +48,11 @@ class Settings:
             models_dir=env("MODELS_DIR", d.models_dir),
             whisper_model=env("WHISPER_MODEL", d.whisper_model),
             piper_voice=env("PIPER_VOICE", d.piper_voice),
+            apns_key_id=env("APNS_KEY_ID", d.apns_key_id),
+            apns_team_id=env("APNS_TEAM_ID", d.apns_team_id),
+            apns_key_file=env("APNS_KEY_FILE", d.apns_key_file),
+            apns_topic=env("APNS_TOPIC", d.apns_topic) or d.apns_topic,
+            device_file=env("DEVICE_FILE", d.device_file),
+            device_port=int(env("DEVICE_PORT", d.device_port)),
+            device_secret=env("DEVICE_SECRET", d.device_secret),
         )

@@ -13,6 +13,22 @@ describe("loadConfig", () => {
     expect(config.maxWaitMs).toBe(10 * 60 * 1_000);
   });
 
+  it("applies default push wait and ring timeout values", () => {
+    const config = loadConfig(baseEnv);
+    expect(config.pushWaitMs).toBe(20_000);
+    expect(config.ringTimeoutS).toBe(60);
+  });
+
+  it("honours overrides for push wait and ring timeout", () => {
+    const config = loadConfig({
+      ...baseEnv,
+      PUSH_WAIT_MS: "5000",
+      RING_TIMEOUT_S: "45",
+    });
+    expect(config.pushWaitMs).toBe(5_000);
+    expect(config.ringTimeoutS).toBe(45);
+  });
+
   it("defaults to the local Compose stack's ports and dialplan", () => {
     const config = loadConfig(baseEnv);
     expect(config).toMatchObject({
@@ -63,16 +79,18 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ARI_USERNAME: "u" })).toThrow(/ARI_PASSWORD/);
   });
 
-  it.each(["POLL_INTERVAL_MS", "MAX_WAIT_MS"])(
-    "rejects a non-positive or non-numeric %s",
-    (name) => {
-      for (const value of ["-1", "0", "abc", "Infinity", "NaN"]) {
-        expect(() => loadConfig({ ...baseEnv, [name]: value })).toThrow(
-          new RegExp(name),
-        );
-      }
-    },
-  );
+  it.each([
+    "POLL_INTERVAL_MS",
+    "MAX_WAIT_MS",
+    "PUSH_WAIT_MS",
+    "RING_TIMEOUT_S",
+  ])("rejects a non-positive or non-numeric %s", (name) => {
+    for (const value of ["-1", "0", "abc", "Infinity", "NaN"]) {
+      expect(() => loadConfig({ ...baseEnv, [name]: value })).toThrow(
+        new RegExp(name),
+      );
+    }
+  });
 
   it("accepts fractional positive durations", () => {
     expect(loadConfig({ ...baseEnv, MAX_WAIT_MS: "1.5" }).maxWaitMs).toBe(1.5);

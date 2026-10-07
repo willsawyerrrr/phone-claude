@@ -29,6 +29,8 @@ const config: Config = {
   dialplanExtension: "700",
   pollIntervalMs: 0,
   maxWaitMs: 1_000,
+  pushWaitMs: 1_000,
+  ringTimeoutS: 60,
 };
 
 vi.mock("./config.js", () => ({

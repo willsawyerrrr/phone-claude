@@ -2,6 +2,7 @@ import type { Config } from "./config.js";
 
 const CANCEL_TIMEOUT_MS = 5_000;
 const REQUEST_TIMEOUT_MS = 10_000;
+const ENDPOINT_POLL_INTERVAL_MS = 1_000;
 
 interface CallStatusResponse {
   status: "pending" | "answered" | "failed";
@@ -10,8 +11,10 @@ interface CallStatusResponse {
 }
 
 /**
- * Places a call: registers the prompt with the voice pipeline, then has
- * Asterisk originate the call to the soft-phone via ARI. The caller supplies
+ * Places a call: registers the prompt with the voice pipeline, wakes the
+ * soft-phone with a VoIP push if its endpoint isn't online (the app
+ * unregisters when backgrounded), then has Asterisk originate the call to it
+ * via ARI, ringing for `ringTimeoutS`. The caller supplies
  * the call ID (a UUID, because Asterisk's AudioSocket keys the audio stream
  * by one) so it can track and cancel the call from before the first request.
  * It also names the ARI channel, so the call can be hung up without tracking
@@ -38,6 +41,10 @@ export async function startCall(
       );
     }
 
+    if (!(await endpointIsOnline(config))) {
+      await wakePhone(config);
+    }
+
     const originate = await fetch(
       `${config.ariUrl}/ari/channels?${new URLSearchParams({
         endpoint: `PJSIP/${config.sipEndpoint}`,
@@ -45,6 +52,7 @@ export async function startCall(
         extension: config.dialplanExtension,
         priority: "1",
         channelId: callId,
+        timeout: String(config.ringTimeoutS),
       })}`,
       {
         method: "POST",
@@ -64,6 +72,63 @@ export async function startCall(
   } catch (error) {
     await cancelCall(config, callId);
     throw error;
+  }
+}
+
+/**
+ * Sends a VoIP push to the phone, then waits up to `pushWaitMs` for its
+ * endpoint to come online. Throws if the push fails or the phone never
+ * registers.
+ */
+async function wakePhone(config: Config): Promise<void> {
+  const push = await fetch(`${config.pipelineUrl}/push`, {
+    method: "POST",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!push.ok) {
+    throw new Error(
+      `The phone could not be woken (${push.status}): ${await pushError(push)}`,
+    );
+  }
+
+  const deadline = Date.now() + config.pushWaitMs;
+  while (Date.now() < deadline) {
+    await sleep(Math.min(ENDPOINT_POLL_INTERVAL_MS, deadline - Date.now()));
+    if (await endpointIsOnline(config)) return;
+  }
+  throw new Error(
+    `The phone did not come online (waited ${config.pushWaitMs}ms after the push)`,
+  );
+}
+
+async function pushError(response: Response): Promise<string> {
+  const text = await response.text();
+  try {
+    const { error } = JSON.parse(text) as { error?: string };
+    return error ?? text;
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * Whether ARI reports the soft-phone's endpoint as `online`. Any other
+ * outcome, including an unreachable ARI, counts as not online.
+ */
+async function endpointIsOnline(config: Config): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `${config.ariUrl}/ari/endpoints/PJSIP/${encodeURIComponent(config.sipEndpoint)}`,
+      {
+        headers: { Authorization: ariAuthorization(config) },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
+    );
+    if (!response.ok) return false;
+    const { state } = (await response.json()) as { state?: string };
+    return state === "online";
+  } catch {
+    return false;
   }
 }
 

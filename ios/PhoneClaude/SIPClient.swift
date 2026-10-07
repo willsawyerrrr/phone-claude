@@ -4,8 +4,8 @@ import linphonesw
 
 /// Registers with Asterisk over UDP and answers incoming calls, using the Linphone SDK for SIP and media.
 ///
-/// Foreground only: there is no CallKit or PushKit, so incoming calls are received only while the app is
-/// open. The screen is kept awake while registered.
+/// Linphone leaves the audio session to CallKit: `activateAudioSession(_:)` must follow CallKit's
+/// activation. The screen is kept awake while registered.
 @Observable
 final class SIPClient {
     enum Registration: Equatable {
@@ -24,6 +24,11 @@ final class SIPClient {
     private(set) var registration = Registration.unregistered
     private(set) var error: String?
     var callState: CallState { calls.state }
+
+    /// Called when an incoming call is accepted for ringing, with the caller.
+    @ObservationIgnored var onIncoming: ((String) -> Void)?
+    /// Called when the current call ends.
+    @ObservationIgnored var onEnded: (() -> Void)?
 
     @ObservationIgnored private var core: Core?
     @ObservationIgnored private var delegate: CoreDelegateStub?
@@ -44,6 +49,7 @@ final class SIPClient {
             let newCore = try factory.createCore(configPath: "", factoryConfigPath: "", systemContext: nil)
             core = newCore
             newCore.ipv6Enabled = false
+            newCore.callkitEnabled = true
 
             let newDelegate = CoreDelegateStub(
                 onCallStateChanged: { [weak self] _, call, state, _ in self?.callChanged(call, state) },
@@ -92,6 +98,11 @@ final class SIPClient {
         UIApplication.shared.isIdleTimerDisabled = false
     }
 
+    /// Tells Linphone whether CallKit has activated the audio session.
+    func activateAudioSession(_ activated: Bool) {
+        core?.activateAudioSession(activated: activated)
+    }
+
     /// Answers the ringing call, recording `error` on failure.
     func answer() {
         do { try call?.accept() } catch { self.error = error.localizedDescription }
@@ -118,14 +129,17 @@ final class SIPClient {
         case .IncomingReceived:
             if calls.incoming(id, from: peer) {
                 self.call = call
+                onIncoming?(peer)
             } else {
                 do { try call.decline(reason: .Busy) } catch { self.error = error.localizedDescription }
             }
         case .Connected, .StreamsRunning:
             calls.connected(id, with: peer)
         case .End, .Error, .Released:
+            guard calls.current == id else { break }
             calls.ended(id)
-            if calls.current == nil { self.call = nil }
+            self.call = nil
+            onEnded?()
         default:
             break
         }

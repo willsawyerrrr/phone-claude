@@ -16,6 +16,22 @@ final class KeychainTests: XCTestCase {
         XCTAssertEqual(Keychain.get(account), "two")
     }
 
+    func testItemsAreReadableWhileLocked() throws {
+        try Keychain.set("one", for: account)
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: "dev.willsawyerrrr.phone-claude",
+            kSecAttrAccount: account,
+            kSecReturnAttributes: true,
+        ]
+        var result: AnyObject?
+        XCTAssertEqual(SecItemCopyMatching(query as CFDictionary, &result), errSecSuccess)
+        let attributes = try XCTUnwrap(result as? [CFString: Any])
+        XCTAssertEqual(
+            attributes[kSecAttrAccessible] as? String,
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+    }
+
     func testDelete() throws {
         try Keychain.set("one", for: account)
         try Keychain.delete(account)
