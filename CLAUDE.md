@@ -44,6 +44,12 @@ docker run --rm voice-pipeline-test`.
   `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude
 -destination 'platform=iOS Simulator,name=<simulator>,OS=latest'`.
 
+## CI
+
+- `.github/workflows/ci.yml` runs on every pull request and push to `main`.
+  Its `CI Status` job needs every other job; it is the only check the `main`
+  ruleset requires, so any new job must be added to its `needs:`.
+
 ## Local call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and

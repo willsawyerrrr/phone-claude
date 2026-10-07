@@ -49,3 +49,15 @@ jobs:
           udid=$(xcrun simctl list devices available | grep -m1 'iPhone' | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}')
           xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude \
             -destination "platform=iOS Simulator,id=$udid"
+
+  ci-status:
+    name: CI Status
+    if: always()
+    needs: [ci, voice-pipeline, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any job failed or was cancelled
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            exit 1
+          fi
