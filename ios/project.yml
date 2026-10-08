@@ -19,6 +19,7 @@ targets:
       path: PhoneClaude/Info.plist
       properties:
         UIBackgroundModes: [voip, audio]
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: PhoneClaude/PhoneClaude.entitlements
       properties:
