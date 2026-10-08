@@ -27,7 +27,7 @@ final class SIPClient {
 
     /// Called when an incoming call is accepted for ringing, with the caller.
     @ObservationIgnored var onIncoming: ((String) -> Void)?
-    /// Called when the current call ends.
+    /// Called on a later main-queue turn, outside Linphone's notification, once the current call is released.
     @ObservationIgnored var onEnded: (() -> Void)?
 
     @ObservationIgnored private var core: Core?
@@ -135,11 +135,13 @@ final class SIPClient {
             }
         case .Connected, .StreamsRunning:
             calls.connected(id, with: peer)
-        case .End, .Error, .Released:
+        case .Released:
+            // The media stream is gone only once the call is released.
             guard calls.current == id else { break }
             calls.ended(id)
             self.call = nil
-            onEnded?()
+            // `onEnded` may stop the core, which Linphone forbids inside its own notifications.
+            DispatchQueue.main.async { [weak self] in self?.onEnded?() }
         default:
             break
         }

@@ -39,7 +39,7 @@ Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it
 
 - `PhoneClaudeApp.swift` — app entry point; creates `AppModel` at launch so a push can start the app in the background.
 - `AppModel.swift` — wires `SIPClient` to PushKit and CallKit, suspends the SIP client in the background, and sends the token to the stack.
-- `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up. A failed registration is stopped and can be retried.
+- `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up. A failed registration is stopped and can be retried. The core is never stopped inside a Linphone notification: the end of a call is reported on a later main-queue turn, once the call is released.
 - `CallTracker.swift` — tracks the single current SIP call; a second incoming call is declined as busy.
 - `CallKitCalls.swift` — matches a push's CallKit call to its SIP INVITE and decides what to answer, decline, or end.
 - `CallKitController.swift`, `VoIPPush.swift` — thin CallKit and PushKit wrappers; CallKit activates the audio session for Linphone.
