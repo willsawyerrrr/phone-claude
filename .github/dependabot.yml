@@ -14,6 +14,13 @@ updates:
     groups:
       pip:
         update-types: [minor, patch]
+    ignore:
+      # The latest aiohttp requires multidict<7.
+      - dependency-name: multidict
+        update-types: [version-update:semver-major]
+      # The latest tokenizers (via faster-whisper) requires huggingface-hub<2.
+      - dependency-name: huggingface-hub
+        update-types: [version-update:semver-major]
   - package-ecosystem: docker
     directories:
       - /local/asterisk
