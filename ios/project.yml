@@ -19,6 +19,7 @@ targets:
       path: PhoneClaude/Info.plist
       properties:
         UIBackgroundModes: [voip, audio]
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: PhoneClaude/PhoneClaude.entitlements
       properties:
@@ -30,6 +31,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.willsawyerrrr.phone-claude
         GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_CFBundleDisplayName: Phone Claude
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
