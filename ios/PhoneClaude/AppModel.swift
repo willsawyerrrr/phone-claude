@@ -87,9 +87,20 @@ final class AppModel {
     private func pushReceived(_ completion: @escaping () -> Void) {
         let id = UUID()
         let tracked = kitCalls.pushed(id)
-        let canRegister = SIPConfig.registrationEnabled && SIPConfig.load().isComplete
+        let enabled = SIPConfig.registrationEnabled
+        let complete = SIPConfig.load().isComplete
+        let canRegister = enabled && complete
+        let application = UIApplication.shared
+        Log.push.notice("handling push \(id, privacy: .public): tracked \(tracked, privacy: .public)")
+        Log.push.notice(
+            "registration enabled \(enabled, privacy: .public), config complete \(complete, privacy: .public)")
+        Log.push.notice(
+            "app state \(application.applicationState.rawValue, privacy: .public), protected data available \(application.isProtectedDataAvailable, privacy: .public)"
+        )
         callKit.reportIncoming(id, from: Self.caller) { [weak self] error in
             completion()
+            let outcome = error == nil ? "reported" : "failed"
+            Log.push.notice("report outcome \(id, privacy: .public): \(outcome, privacy: .public)")
             guard let self else { return }
             if !tracked {
                 callKit.reportEnded(id, reason: .failed)

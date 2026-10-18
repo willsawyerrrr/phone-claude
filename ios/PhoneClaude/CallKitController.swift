@@ -27,11 +27,44 @@ final class CallKitController: NSObject, CXProviderDelegate {
         update.remoteHandle = CXHandle(type: .generic, value: caller)
         update.localizedCallerName = caller
         update.hasVideo = false
-        provider.reportNewIncomingCall(with: id, update: update, completion: completion)
+        Log.callKit.notice("reportIncoming start \(id, privacy: .public)")
+        provider.reportNewIncomingCall(with: id, update: update) { error in
+            if let error {
+                Log.callKit.error(
+                    "reportIncoming failed \(id, privacy: .public): \(Self.describe(error), privacy: .public)")
+            } else {
+                Log.callKit.notice("reportIncoming succeeded \(id, privacy: .public)")
+            }
+            completion(error)
+        }
     }
 
     func reportEnded(_ id: UUID, reason: CXCallEndedReason) {
+        Log.callKit.notice("reportEnded \(id, privacy: .public) reason \(reason.rawValue, privacy: .public)")
         provider.reportCall(with: id, endedAt: nil, reason: reason)
+    }
+
+    /// Describes `error` by domain and code, naming the code if it is an incoming-call error.
+    static func describe(_ error: Error) -> String {
+        let nsError = error as NSError
+        var text = "\(nsError.domain) \(nsError.code)"
+        if nsError.domain == CXErrorDomainIncomingCall,
+            let code = CXErrorCodeIncomingCallError.Code(rawValue: nsError.code)
+        {
+            text += " (\(name(of: code)))"
+        }
+        return "\(text): \(nsError.localizedDescription)"
+    }
+
+    private static func name(of code: CXErrorCodeIncomingCallError.Code) -> String {
+        switch code {
+        case .unknown: "unknown"
+        case .unentitled: "unentitled"
+        case .callUUIDAlreadyExists: "callUUIDAlreadyExists"
+        case .filteredByDoNotDisturb: "filteredByDoNotDisturb"
+        case .filteredByBlockList: "filteredByBlockList"
+        @unknown default: "unrecognised"
+        }
     }
 
     /// Answers `id` as though the user had in the call UI.
@@ -44,23 +77,29 @@ final class CallKitController: NSObject, CXProviderDelegate {
         controller.request(CXTransaction(action: CXEndCallAction(call: id))) { _ in }
     }
 
-    func providerDidReset(_ provider: CXProvider) {}
+    func providerDidReset(_ provider: CXProvider) {
+        Log.callKit.notice("provider reset")
+    }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        Log.callKit.notice("answer action \(action.callUUID, privacy: .public)")
         onAnswer?(action.callUUID)
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        Log.callKit.notice("end action \(action.callUUID, privacy: .public)")
         onEnd?(action.callUUID)
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        Log.callKit.notice("audio session activated")
         onAudioSession?(true)
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        Log.callKit.notice("audio session deactivated")
         onAudioSession?(false)
     }
 }
