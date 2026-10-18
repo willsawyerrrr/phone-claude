@@ -39,7 +39,9 @@ sends its PushKit token to the pipeline's device endpoint. See `ios/README.md`.
 ## Build and test
 
 - TypeScript: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`,
-  `pnpm format:check`.
+  `pnpm format:check`. CI and the MCP server on the user's machine run Node 26
+  (`.nvmrc`, `engines` `26.x`, `@types/node` `^26`); Dependabot ignores
+  `@types/node` major bumps.
 - Voice pipeline (`ruff` + `pytest`):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.

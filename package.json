@@ -6,7 +6,7 @@
   },
   "packageManager": "pnpm@11.25.0",
   "engines": {
-    "node": ">=22.13"
+    "node": "26.x"
   },
   "type": "module",
   "scripts": {
