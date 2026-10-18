@@ -162,15 +162,49 @@ async def test_reply_is_cut_off_at_the_maximum_length(settings):
     assert store.get(CALL_ID).answer == "a very long answer"
 
 
-async def test_caller_hanging_up_while_listening_fails_the_call(settings):
-    channel = FakeChannel(talk(0.2))
-    session, store, _ = make_session(channel, FakeStt(), settings)
+async def test_caller_hanging_up_right_after_speaking_keeps_the_reply(settings):
+    channel = FakeChannel(talk(0.4))
+    stt = FakeStt("banana")
+    session, store, _ = make_session(channel, stt, settings)
+    task = asyncio.create_task(session.run())
+    await eventually(lambda: len(channel.speech_frames) > 0)
+    await asyncio.sleep(0.05)
+
+    channel.caller_hangs_up()
+    await task
+
+    assert store.get(CALL_ID).status == "answered"
+    assert store.get(CALL_ID).answer == "banana"
+    assert len(channel.speech_frames) == 1
+    assert channel.hung_up and channel.closed
+
+
+async def test_caller_hanging_up_without_speaking_fails_the_call(settings):
+    channel = FakeChannel(quiet(0.4))
+    stt = FakeStt()
+    session, store, _ = make_session(channel, stt, settings)
     task = asyncio.create_task(session.run())
     await asyncio.sleep(0.05)
 
     channel.caller_hangs_up()
     await task
 
+    assert stt.utterances == []
+    assert store.get(CALL_ID).status == "failed"
+    assert store.get(CALL_ID).error == "The call ended before an answer was captured"
+
+
+async def test_caller_hanging_up_after_unintelligible_speech_fails_the_call(settings):
+    channel = FakeChannel(talk(0.2))
+    stt = FakeStt("  ")
+    session, store, _ = make_session(channel, stt, settings)
+    task = asyncio.create_task(session.run())
+    await asyncio.sleep(0.05)
+
+    channel.caller_hangs_up()
+    await task
+
+    assert len(stt.utterances) == 1
     assert store.get(CALL_ID).status == "failed"
     assert store.get(CALL_ID).error == "The call ended before an answer was captured"
 
