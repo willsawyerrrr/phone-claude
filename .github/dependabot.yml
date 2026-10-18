@@ -7,12 +7,12 @@ updates:
     groups:
       npm:
         update-types: [minor, patch]
-  - package-ecosystem: pip
+  - package-ecosystem: uv
     directory: /local/voice-pipeline
     schedule:
       interval: weekly
     groups:
-      pip:
+      uv:
         update-types: [minor, patch]
     ignore:
       # The latest aiohttp requires multidict<7.
