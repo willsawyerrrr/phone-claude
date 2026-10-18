@@ -50,6 +50,12 @@ docker run --rm voice-pipeline-test`.
   Its `CI Status` job needs every other job; it is the only check the `main`
   ruleset requires, so any new job must be added to its `needs:`.
 
+- `.github/workflows/deploy-ios.yml` runs on pushes to `main` that touch
+  `ios/`. It calls platform's reusable `ios-testflight.yml`, which archives
+  the `PhoneClaude` scheme and uploads it to TestFlight; the build number is
+  the run number. It needs the `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8`
+  repository secrets. It is not part of `CI Status`.
+
 ## Local call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and

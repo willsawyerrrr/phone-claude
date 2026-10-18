@@ -48,6 +48,10 @@ Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it
 - `ContentView.swift` — settings form, registration status, and answer/decline/hang-up controls.
 - `PhoneClaudeTests/` — unit tests for the above that need no device.
 
+## TestFlight
+
+Each push to `main` that changes `ios/` uploads a build to TestFlight (`.github/workflows/deploy-ios.yml`, using platform's `ios-testflight.yml`). The build number is the workflow run number; the marketing version is `MARKETING_VERSION` in `project.yml`. The repository needs the `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` secrets.
+
 ## Simulator
 
 Registration, ringing, answering, and playback of the spoken question work on the simulator, but PushKit tokens and VoIP pushes do not arrive. Its audio I/O can time out while a call starts and abort the app (`AURemoteIO::Initialize`); relaunch and retry, or use a device.
