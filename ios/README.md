@@ -35,6 +35,15 @@ Enter the same values as for any soft-phone (see [`../local/README.md`](../local
 
 Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. The password is stored in the Keychain (readable after first unlock, so a push can register the app while locked); the rest in `UserDefaults`. Allow Local Network and Microphone access when prompted. Answering from the banner or lock screen is handled by iOS, which may bring the app to the foreground; the app does nothing to request that and keeps the call running either way. Once registered, the app registers again on launch, in the foreground, and on each push until you tap Unregister.
 
+## Debugging push and CallKit
+
+The app logs the push and CallKit path (`push` and `callkit` categories, subsystem `dev.willsawyerrrr.phone-claude`) at `.notice`: token updates, each push, whether its call was reported, CallKit's error domain and code (including `filteredByDoNotDisturb` and `filteredByBlockList`), and the provider's answer, end and audio-session callbacks. Tokens and credentials are never logged. Collect them from the connected device:
+
+```sh
+sudo /usr/bin/log collect --device-udid <udid> --last 10m --output x.logarchive
+log show x.logarchive --predicate 'subsystem == "dev.willsawyerrrr.phone-claude"'
+```
+
 ## Layout
 
 - `PhoneClaudeApp.swift` — app entry point; creates `AppModel` at launch so a push can start the app in the background.
@@ -43,6 +52,7 @@ Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it
 - `RegistrationPolicy.swift` — the core is started only when none is running and never stopped or replaced while a SIP or CallKit call exists, so foregrounding mid-call leaves the call alone.
 - `CallTracker.swift` — tracks the single current SIP call; a second incoming call is declined as busy.
 - `CallKitCalls.swift` — matches a push's CallKit call to its SIP INVITE and decides what to answer, decline, or end.
+- `Log.swift` — the `push` and `callkit` loggers.
 - `CallKitController.swift`, `VoIPPush.swift` — thin CallKit and PushKit wrappers; CallKit activates the audio session for Linphone.
 - `DeviceRegistration.swift` — builds the token registration request.
 - `SIPConfig.swift`, `Keychain.swift` — connection settings and their persistence.
