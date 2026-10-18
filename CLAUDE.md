@@ -51,7 +51,9 @@ docker run --rm voice-pipeline-test`.
 
 - `.github/workflows/ci.yml` runs on every pull request and push to `main`.
   Its `CI Status` job needs every other job; it is the only check the `main`
-  ruleset requires, so any new job must be added to its `needs:`.
+  ruleset requires, so any new job must be added to its `needs:`. The ruleset
+  also requires a pull request (squash merges only) and blocks force pushes and
+  deletion.
 
 - `.github/workflows/deploy-ios.yml` runs on pushes to `main` that touch
   `ios/`. It calls platform's reusable `ios-testflight.yml`, which archives
