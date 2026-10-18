@@ -7,6 +7,7 @@ import os
 ///
 /// While the app is in the background the SIP client is stopped, so Asterisk sees the phone as offline and
 /// sends a VoIP push, which re-registers it.
+@MainActor
 @Observable
 final class AppModel {
     static let shared = AppModel()
@@ -22,7 +23,7 @@ final class AppModel {
     @ObservationIgnored private let callKit = CallKitController()
     @ObservationIgnored private let push = VoIPPush()
     @ObservationIgnored private var kitCalls = CallKitCalls()
-    @ObservationIgnored private var timeout: Task<Void, Never>?
+    @ObservationIgnored private let timeout = InviteTimer()
     @ObservationIgnored private let log = Logger(subsystem: "dev.willsawyerrrr.phone-claude", category: "app")
 
     private init() {
@@ -112,10 +113,8 @@ final class AppModel {
         }
         guard tracked, canRegister else { return }
         registerIfEnabled()
-        timeout?.cancel()
-        timeout = Task { [weak self] in
-            try? await Task.sleep(for: Self.inviteTimeout)
-            guard !Task.isCancelled, let self, let id = kitCalls.timedOut() else { return }
+        timeout.start(after: Self.inviteTimeout) { [weak self] in
+            guard let self, let id = kitCalls.timedOut() else { return }
             callKit.reportEnded(id, reason: .unanswered)
             suspendIfBackground()
         }
@@ -133,7 +132,7 @@ final class AppModel {
     }
 
     private func callEnded() {
-        timeout?.cancel()
+        timeout.cancel()
         if let id = kitCalls.inviteEnded() { callKit.reportEnded(id, reason: .remoteEnded) }
         if !SIPConfig.registrationEnabled { client.unregister() }
         suspendIfBackground()
@@ -161,7 +160,7 @@ final class AppModel {
             let request = DeviceRegistration.request(
                 for: config, token: token, environment: .current)
         else { return }
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             do {
                 let (_, response) = try await URLSession.shared.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0

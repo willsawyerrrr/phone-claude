@@ -48,6 +48,7 @@ log show x.logarchive --predicate 'subsystem == "dev.willsawyerrrr.phone-claude"
 
 - `PhoneClaudeApp.swift` — app entry point; creates `AppModel` at launch so a push can start the app in the background.
 - `AppModel.swift` — wires `SIPClient` to PushKit and CallKit, suspends the SIP client in the background, and sends the token to the stack.
+- `InviteTimer.swift` — runs the 30 s wait for a pushed call's INVITE on the main actor. `AppModel` and `SIPClient` are `@MainActor`, since they touch UIKit and observed state; PushKit, CallKit and Linphone callbacks all arrive on the main queue and enter them via `MainActor.assumeIsolated`.
 - `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up. A failed registration is stopped and can be retried. The core is never stopped inside a Linphone notification: the end of a call is reported on a later main-queue turn, once the call is released.
 - `RegistrationPolicy.swift` — the core is started only when none is running and never stopped or replaced while a SIP or CallKit call exists, so foregrounding mid-call leaves the call alone.
 - `CallTracker.swift` — tracks the single current SIP call; a second incoming call is declined as busy.

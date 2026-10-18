@@ -3,9 +3,9 @@ import AVFoundation
 
 /// Reports calls to CallKit and relays the user's actions in the native call UI.
 final class CallKitController: NSObject, CXProviderDelegate {
-    var onAnswer: ((UUID) -> Void)?
-    var onEnd: ((UUID) -> Void)?
-    var onAudioSession: ((Bool) -> Void)?
+    var onAnswer: (@MainActor (UUID) -> Void)?
+    var onEnd: (@MainActor (UUID) -> Void)?
+    var onAudioSession: (@MainActor (Bool) -> Void)?
 
     private let provider: CXProvider
     private let controller = CXCallController()
@@ -83,23 +83,23 @@ final class CallKitController: NSObject, CXProviderDelegate {
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         Log.callKit.notice("answer action \(action.callUUID, privacy: .public)")
-        onAnswer?(action.callUUID)
+        MainActor.assumeIsolated { onAnswer?(action.callUUID) }
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         Log.callKit.notice("end action \(action.callUUID, privacy: .public)")
-        onEnd?(action.callUUID)
+        MainActor.assumeIsolated { onEnd?(action.callUUID) }
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         Log.callKit.notice("audio session activated")
-        onAudioSession?(true)
+        MainActor.assumeIsolated { onAudioSession?(true) }
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         Log.callKit.notice("audio session deactivated")
-        onAudioSession?(false)
+        MainActor.assumeIsolated { onAudioSession?(false) }
     }
 }

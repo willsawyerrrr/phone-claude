@@ -2,9 +2,9 @@ import PushKit
 
 /// Receives the PushKit token and VoIP pushes.
 final class VoIPPush: NSObject, PKPushRegistryDelegate {
-    var onToken: ((Data) -> Void)?
+    var onToken: (@MainActor (Data) -> Void)?
     /// Called for each push; `completion` must be called once its call has been reported to CallKit.
-    var onPush: ((_ completion: @escaping () -> Void) -> Void)?
+    var onPush: (@MainActor (_ completion: @escaping () -> Void) -> Void)?
 
     private let registry = PKPushRegistry(queue: .main)
 
@@ -18,7 +18,7 @@ final class VoIPPush: NSObject, PKPushRegistryDelegate {
         _ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType
     ) {
         Log.push.notice("token updated (\(pushCredentials.token.count, privacy: .public) bytes)")
-        onToken?(pushCredentials.token)
+        MainActor.assumeIsolated { onToken?(pushCredentials.token) }
     }
 
     func pushRegistry(
@@ -26,9 +26,11 @@ final class VoIPPush: NSObject, PKPushRegistryDelegate {
         for type: PKPushType, completion: @escaping () -> Void
     ) {
         Log.push.notice("push received (type \(type.rawValue, privacy: .public))")
-        onPush? {
-            Log.push.notice("completion invoked")
-            completion()
+        MainActor.assumeIsolated {
+            onPush? {
+                Log.push.notice("completion invoked")
+                completion()
+            }
         }
     }
 }
