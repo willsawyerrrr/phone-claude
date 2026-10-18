@@ -202,6 +202,9 @@ class CallSession:
         arrive. If none arrive at all, the wait is bounded in wall-clock time
         instead: `no_input_timeout_s` before any speech, `quiet_period_s`
         once the caller has started (the same silence that ends a reply).
+
+        If the caller hangs up after speaking, what they said is transcribed
+        rather than discarded.
         """
         settings = self._settings
         self._vad.reset()
@@ -212,8 +215,10 @@ class CallSession:
         audio = bytearray()
 
         while True:
-            if self._hung_up.is_set():
-                return _NoInput.HUNG_UP
+            # Audio queued before the hangup is consumed first; the pump
+            # queues the end-of-call sentinel after it.
+            if self._hung_up.is_set() and self._inbox.empty():
+                return await self._reply_at_hangup(audio, speech_started)
             stall_limit = (
                 settings.no_input_timeout_s
                 if speech_started is None
@@ -226,7 +231,7 @@ class CallSession:
                 stalled = True
             else:
                 if frame is None:
-                    return _NoInput.HUNG_UP
+                    return await self._reply_at_hangup(audio, speech_started)
                 clock += len(frame) / BYTES_PER_SECOND
 
                 if self._vad.is_speech(frame):
@@ -260,6 +265,18 @@ class CallSession:
                 audio.clear()
                 preroll.clear()
                 self._vad.reset()
+
+    async def _reply_at_hangup(
+        self, audio: bytearray, speech_started: float | None
+    ) -> str | _NoInput:
+        """Transcribes the speech captured before the caller hung up, so a
+        reply isn't lost to a hangup that follows it closely. Returns
+        `_NoInput.HUNG_UP` if there was no intelligible speech."""
+        if speech_started is not None:
+            text = await asyncio.to_thread(self._stt.transcribe, bytes(audio))
+            if text.strip():
+                return text.strip()
+        return _NoInput.HUNG_UP
 
     async def _end_call(self) -> None:
         await self._channel.send_hangup()
