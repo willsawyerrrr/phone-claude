@@ -33,13 +33,14 @@ Enter the same values as for any soft-phone (see [`../local/README.md`](../local
 - **Password:** `SOFTPHONE_PASSWORD`
 - **Push registration port:** `DEVICE_PORT` (default `8081`), where the app sends its PushKit token
 
-Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. The password is stored in the Keychain (readable after first unlock, so a push can register the app while locked); the rest in `UserDefaults`. Allow Local Network and Microphone access when prompted. Once registered, the app registers again on launch, in the foreground, and on each push until you tap Unregister.
+Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. The password is stored in the Keychain (readable after first unlock, so a push can register the app while locked); the rest in `UserDefaults`. Allow Local Network and Microphone access when prompted. Answering from the banner or lock screen is handled by iOS, which may bring the app to the foreground; the app does nothing to request that and keeps the call running either way. Once registered, the app registers again on launch, in the foreground, and on each push until you tap Unregister.
 
 ## Layout
 
 - `PhoneClaudeApp.swift` — app entry point; creates `AppModel` at launch so a push can start the app in the background.
 - `AppModel.swift` — wires `SIPClient` to PushKit and CallKit, suspends the SIP client in the background, and sends the token to the stack.
 - `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up. A failed registration is stopped and can be retried. The core is never stopped inside a Linphone notification: the end of a call is reported on a later main-queue turn, once the call is released.
+- `RegistrationPolicy.swift` — the core is started only when none is running and never stopped or replaced while a SIP or CallKit call exists, so foregrounding mid-call leaves the call alone.
 - `CallTracker.swift` — tracks the single current SIP call; a second incoming call is declined as busy.
 - `CallKitCalls.swift` — matches a push's CallKit call to its SIP INVITE and decides what to answer, decline, or end.
 - `CallKitController.swift`, `VoIPPush.swift` — thin CallKit and PushKit wrappers; CallKit activates the audio session for Linphone.

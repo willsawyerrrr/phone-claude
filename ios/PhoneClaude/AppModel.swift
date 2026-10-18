@@ -37,7 +37,8 @@ final class AppModel {
 
     /// Starts registering if the user has enabled it and the settings are complete.
     func registerIfEnabled() {
-        guard SIPConfig.registrationEnabled, client.registration == .unregistered else { return }
+        guard RegistrationPolicy.shouldStart(enabled: SIPConfig.registrationEnabled, coreRunning: client.isRunning)
+        else { return }
         let config = SIPConfig.load()
         guard config.isComplete else { return }
         try? client.register(config)
@@ -46,6 +47,10 @@ final class AppModel {
 
     func enable(_ config: SIPConfig) throws {
         try config.save()
+        if callInProgress {
+            SIPConfig.registrationEnabled = true
+            return
+        }
         try client.register(config)
         SIPConfig.registrationEnabled = true
         sendToken(config)
@@ -53,7 +58,12 @@ final class AppModel {
 
     func disable() {
         SIPConfig.registrationEnabled = false
+        guard !callInProgress else { return }
         client.unregister()
+    }
+
+    private var callInProgress: Bool {
+        !RegistrationPolicy.maySuspend(sipCallActive: client.callState != .idle, callKitCallActive: kitCalls.current != nil)
     }
 
     /// Answers the ringing call through CallKit, so its UI stays in step.
@@ -68,9 +78,7 @@ final class AppModel {
 
     /// Stops the SIP client while the app is in the background with no call, so the phone is offline.
     func suspendIfBackground() {
-        guard UIApplication.shared.applicationState != .active, kitCalls.current == nil,
-            client.callState == .idle
-        else { return }
+        guard UIApplication.shared.applicationState != .active, !callInProgress else { return }
         client.unregister()
     }
 
@@ -116,6 +124,7 @@ final class AppModel {
     private func callEnded() {
         timeout?.cancel()
         if let id = kitCalls.inviteEnded() { callKit.reportEnded(id, reason: .remoteEnded) }
+        if !SIPConfig.registrationEnabled { client.unregister() }
         suspendIfBackground()
     }
 

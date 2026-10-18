@@ -24,6 +24,8 @@ final class SIPClient {
     private(set) var registration = Registration.unregistered
     private(set) var error: String?
     var callState: CallState { calls.state }
+    /// Whether a core exists, whatever its registration state.
+    var isRunning: Bool { core != nil }
 
     /// Called when an incoming call is accepted for ringing, with the caller.
     @ObservationIgnored var onIncoming: ((String) -> Void)?
