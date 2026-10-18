@@ -43,7 +43,8 @@ sends its PushKit token to the pipeline's device endpoint. See `ios/README.md`.
 - Voice pipeline (`ruff` + `pytest`):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.
-- iOS: in `ios/`, `xcodegen generate`, then
+- iOS (CI and the TestFlight deploy both pin `macos-26` and Xcode 26.6, the
+  newest GA Xcode on GitHub's runners): in `ios/`, `xcodegen generate`, then
   `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude
 -destination 'platform=iOS Simulator,name=<simulator>,OS=latest'`.
 
