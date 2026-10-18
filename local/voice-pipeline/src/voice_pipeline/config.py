@@ -33,7 +33,7 @@ class Settings:
     device_secret: str = ""
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         d = cls()
         env = os.environ.get
         return cls(

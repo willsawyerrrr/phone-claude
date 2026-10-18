@@ -44,7 +44,9 @@ sends its PushKit token to the pipeline's device endpoint. See `ios/README.md`.
   `pnpm format:check`. CI and the MCP server on the user's machine run Node 26
   (`.nvmrc`, `engines` `26.x`, `@types/node` `^26`); Dependabot ignores
   `@types/node` major bumps.
-- Voice pipeline (`ruff` + `pytest`):
+- Voice pipeline (`ruff` + `pytest`; Python 3.14 in the Docker image,
+  `requires-python` and `.python-version`; Dependabot ignores Python major and
+  minor bumps of the base image):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.
 - Stack start script: `shellcheck local/up.sh local/test-up.sh && local/test-up.sh`.

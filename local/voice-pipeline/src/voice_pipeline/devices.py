@@ -50,7 +50,7 @@ class DeviceStore:
             return parse_device(data["token"], data["environment"])
         except FileNotFoundError:
             return None
-        except (OSError, ValueError, KeyError, TypeError):
+        except OSError, ValueError, KeyError, TypeError:
             log.warning("ignoring unreadable device file %s", self._path)
             return None
 

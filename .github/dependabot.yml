@@ -34,6 +34,11 @@ updates:
     groups:
       docker:
         update-types: [minor, patch]
+    ignore:
+      # The voice pipeline's Python minor is pinned in `pyproject.toml` and
+      # `.python-version`; only patch releases of the base image update.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

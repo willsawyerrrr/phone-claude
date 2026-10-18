@@ -32,7 +32,7 @@ class SileroVad:
         self.reset()
 
     @classmethod
-    def load(cls, path: Path, threshold: float) -> "SileroVad":
+    def load(cls, path: Path, threshold: float) -> SileroVad:
         import onnxruntime
 
         options = onnxruntime.SessionOptions()

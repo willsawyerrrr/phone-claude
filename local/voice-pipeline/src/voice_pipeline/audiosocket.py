@@ -29,7 +29,7 @@ async def read_frame(reader: asyncio.StreamReader) -> Frame | None:
     try:
         header = await reader.readexactly(3)
         payload = await reader.readexactly(int.from_bytes(header[1:], "big"))
-    except (asyncio.IncompleteReadError, ConnectionError):
+    except asyncio.IncompleteReadError, ConnectionError:
         return None
     return Frame(header[0], payload)
 
