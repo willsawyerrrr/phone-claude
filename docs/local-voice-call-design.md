@@ -35,7 +35,7 @@ Claude Code ──stdio──▶ mcp-server
    cancels the call in `voice-pipeline`.
 
 `mcp-server` runs as the plain local Node process Claude Code spawns over
-stdio; it is not part of the stack and reaches it over `localhost` ports.
+stdio through the repo-root `bin/phone-claude-mcp-server.js` shim; it is not part of the stack and reaches it over `localhost` ports.
 
 The soft-phone is any SIP app or the SwiftUI app in `ios/`, which registers as
 the same PJSIP endpoint and answers calls through CallKit, including from the

@@ -6,7 +6,10 @@ pnpm workspace with one package:
 
 - `mcp-server/` — standalone MCP server (stdio transport) run locally by
   Claude Code. Exposes one tool, `ask_by_phone`, backed by the local
-  Asterisk + voice-pipeline stack.
+  Asterisk + voice-pipeline stack. The root `bin/phone-claude-mcp-server.js`
+  shim (builds `mcp-server` when `dist` is missing or stale, build output on
+  stderr, then imports `dist/index.js`) is what the root `.mcp.json` and the
+  root `bin` entry launch; `mcp-server/src/shim.test.ts` exercises it.
 
 `local/` is that stack's Docker Compose definition (not a pnpm package). The
 `asterisk` service renders its config from env at container start

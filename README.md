@@ -25,36 +25,23 @@ Run the Asterisk + voice-pipeline Docker Compose stack (`local/`) and pair your 
 
 ### 2. Run `mcp-server` locally
 
-Build it once:
+Run `pnpm install` once. The repo's `.mcp.json` registers `mcp-server` for Claude Code sessions started in the checkout, launching it through `bin/phone-claude-mcp-server.js`. The shim builds `mcp-server` on first launch and whenever its sources change (build output goes to stderr), so there is no build step and no absolute path.
+
+Export the ARI credentials where Claude Code starts, since `.mcp.json` reads them from the environment:
 
 ```sh
-pnpm --filter mcp-server build
+export ARI_USERNAME=<ARI user> ARI_PASSWORD=<ARI password>
 ```
 
-Then register it with Claude Code. Either:
+To use it from other projects, register the shim at user scope instead:
 
 ```sh
-claude mcp add phone-claude \
+claude mcp add --scope user phone-claude \
   --env ARI_USERNAME=<ARI user> --env ARI_PASSWORD=<ARI password> \
-  -- node /absolute/path/to/phone-claude/mcp-server/dist/index.js
+  -- node /absolute/path/to/phone-claude/bin/phone-claude-mcp-server.js
 ```
 
-or via a project `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "phone-claude": {
-      "command": "node",
-      "args": ["/absolute/path/to/phone-claude/mcp-server/dist/index.js"],
-      "env": {
-        "ARI_USERNAME": "<ARI user>",
-        "ARI_PASSWORD": "<ARI password>"
-      }
-    }
-  }
-}
-```
+The shim path stays valid across `pnpm install` and rebuilds; only moving the checkout changes it.
 
 | Env var              | Default                 | Meaning                                                                                    |
 | -------------------- | ----------------------- | ------------------------------------------------------------------------------------------ |
