@@ -6,6 +6,7 @@ import linphonesw
 ///
 /// Linphone leaves the audio session to CallKit: `activateAudioSession(_:)` must follow CallKit's
 /// activation. The screen is kept awake while registered.
+@MainActor
 @Observable
 final class SIPClient {
     enum Registration: Equatable {
@@ -28,9 +29,9 @@ final class SIPClient {
     var isRunning: Bool { core != nil }
 
     /// Called when an incoming call is accepted for ringing, with the caller.
-    @ObservationIgnored var onIncoming: ((String) -> Void)?
+    @ObservationIgnored var onIncoming: (@MainActor (String) -> Void)?
     /// Called on a later main-queue turn, outside Linphone's notification, once the current call is released.
-    @ObservationIgnored var onEnded: (() -> Void)?
+    @ObservationIgnored var onEnded: (@MainActor () -> Void)?
 
     @ObservationIgnored private var core: Core?
     @ObservationIgnored private var delegate: CoreDelegateStub?
@@ -54,9 +55,11 @@ final class SIPClient {
             newCore.callkitEnabled = true
 
             let newDelegate = CoreDelegateStub(
-                onCallStateChanged: { [weak self] _, call, state, _ in self?.callChanged(call, state) },
+                onCallStateChanged: { [weak self] _, call, state, _ in
+                    MainActor.assumeIsolated { self?.callChanged(call, state) }
+                },
                 onAccountRegistrationStateChanged: { [weak self] _, _, state, message in
-                    self?.registrationChanged(state, message)
+                    MainActor.assumeIsolated { self?.registrationChanged(state, message) }
                 }
             )
             delegate = newDelegate
