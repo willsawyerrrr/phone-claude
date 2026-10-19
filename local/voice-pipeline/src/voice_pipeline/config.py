@@ -1,9 +1,9 @@
 import os
 from dataclasses import dataclass
 
-SAMPLE_RATE = 8000
+SAMPLE_RATE = 16000
 BYTES_PER_SECOND = SAMPLE_RATE * 2
-FRAME_BYTES = 320  # 20 ms of 8 kHz, 16-bit mono
+FRAME_BYTES = 640  # 20 ms of 16 kHz, 16-bit mono
 
 
 @dataclass(frozen=True)

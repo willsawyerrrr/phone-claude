@@ -88,14 +88,15 @@ The soft-phone registers to `HOST_LAN_IP:SIP_PORT` over Wi-Fi.
 
 `mcp-server` originates with `POST /ari/channels`:
 
-| Parameter   | Value                                                   |
-| ----------- | ------------------------------------------------------- |
-| `endpoint`  | `PJSIP/<phone endpoint>`                                |
-| `context`   | `ask-by-phone`                                          |
-| `extension` | `700`                                                   |
-| `channelId` | the call ID                                             |
-| `variables` | `{"CALL_ID": "<call ID>"}`                              |
-| `timeout`   | `RING_TIMEOUT_S`, seconds Asterisk rings before failing |
+| Parameter   | Value                                                        |
+| ----------- | ------------------------------------------------------------ |
+| `endpoint`  | `PJSIP/<phone endpoint>`                                     |
+| `context`   | `ask-by-phone`                                               |
+| `extension` | `700`                                                        |
+| `channelId` | the call ID                                                  |
+| `formats`   | `g722,ulaw,alaw`, so the offer to the phone leads with G.722 |
+| `variables` | `{"CALL_ID": "<call ID>"}`                                   |
+| `timeout`   | `RING_TIMEOUT_S`, seconds Asterisk rings before failing      |
 
 The call ID is a UUID (AudioSocket keys the stream by UUID). Hang up with
 `DELETE /ari/channels/<call ID>`. ARI carries control only, never audio.
@@ -105,16 +106,19 @@ The call ID is a UUID (AudioSocket keys the stream by UUID). Hang up with
 ```
 [ask-by-phone]
 exten => 700,1,NoOp(ask_by_phone ${CALL_ID})
- same => n,AudioSocket(${CALL_ID},voice-pipeline:9092)
+ same => n,Dial(AudioSocket/voice-pipeline:9092/${CALL_ID}/c(slin16))
  same => n,Hangup()
 ```
 
-The extension runs when the originated leg answers.
+The extension runs when the originated leg answers. The `AudioSocket()`
+application is fixed at 8 kHz, so the call is bridged to an `AudioSocket/`
+channel instead, whose `c(slin16)` option carries 16 kHz audio.
 
 ### AudioSocket
 
 `voice-pipeline` accepts Asterisk's AudioSocket TCP connection on `9092`.
-Audio is 8 kHz, 16-bit signed linear PCM, mono, in 20 ms frames. The
+Audio is 16 kHz, 16-bit signed linear PCM (kind `0x12`), mono, in 20 ms
+(640-byte) frames. The
 connection's UUID is the call ID; a UUID with no registered prompt is
 rejected: the pipeline hangs up the connection.
 

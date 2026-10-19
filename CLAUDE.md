@@ -19,7 +19,11 @@ it with `local/up.sh`, which detects the Mac's LAN IP and exports it as
 one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
 `mcp-server`'s `SIP_ENDPOINT`), ARI on port 8088, and the `ask-by-phone`
 context whose extension `700` streams the answered call to AudioSocket at
-`voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. The
+`voice-pipeline:9092` (`Dial(AudioSocket/...)` with `c(slin16)`), keyed by the
+`CALL_ID` channel variable. Calls are 16 kHz wideband end to end: the endpoint
+prefers G.722 (falling back to `ulaw,alaw`; `mcp-server` passes
+`formats=g722,ulaw,alaw` to ARI so the offer leads with it) and the pipeline
+works in 16 kHz slin. The
 `voice-pipeline` service (`local/voice-pipeline/`, Python) also stores the
 phone's push token (`PUT /device` on the LAN port `DEVICE_PORT`, bearer
 `SOFTPHONE_PASSWORD`, persisted in the `pipeline-data` volume) and sends the
