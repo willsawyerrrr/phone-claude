@@ -57,6 +57,7 @@ final class SIPClient {
             core = newCore
             newCore.ipv6Enabled = false
             newCore.callkitEnabled = true
+            CodecPolicy.apply(to: newCore)
 
             let newDelegate = CoreDelegateStub(
                 onCallStateChanged: { [weak self] _, call, state, _ in
