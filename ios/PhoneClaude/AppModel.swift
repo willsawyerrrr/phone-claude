@@ -22,7 +22,11 @@ final class AppModel {
 
     @ObservationIgnored private let callKit = CallKitController()
     @ObservationIgnored private let push = VoIPPush()
-    @ObservationIgnored private var kitCalls = CallKitCalls()
+    /// The CallKit call's phase, observable so the call screen follows it before the SIP INVITE arrives.
+    private(set) var callKitPhase = CallKitCalls.Phase.none
+    @ObservationIgnored private var kitCalls = CallKitCalls() {
+        didSet { callKitPhase = kitCalls.phase }
+    }
     @ObservationIgnored private let timeout = InviteTimer()
     @ObservationIgnored private let log = Logger(subsystem: "dev.willsawyerrrr.phone-claude", category: "app")
 

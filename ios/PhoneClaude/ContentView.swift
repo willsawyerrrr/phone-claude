@@ -7,6 +7,15 @@ struct ContentView: View {
     @State private var error: String?
 
     var body: some View {
+        if let presentation = CallPresentation.of(client.callState, callKit: model.callKitPhase) {
+            CallView(
+                presentation: presentation, state: client.callState, onAnswer: model.answer, onEnd: model.hangUp)
+        } else {
+            settings
+        }
+    }
+
+    private var settings: some View {
         NavigationStack {
             Form {
                 Section("Server") {
@@ -38,20 +47,6 @@ struct ContentView: View {
                     }
                     if let error = error ?? client.error ?? model.deviceError {
                         Text(error).foregroundStyle(.red)
-                    }
-                }
-
-                switch client.callState {
-                case .idle:
-                    EmptyView()
-                case .ringing(let peer):
-                    Section("Incoming call from \(peer)") {
-                        Button("Answer", action: model.answer)
-                        Button("Decline", role: .destructive, action: model.hangUp)
-                    }
-                case .active(let peer):
-                    Section("In call with \(peer)") {
-                        Button("Hang up", role: .destructive, action: model.hangUp)
                     }
                 }
             }
