@@ -33,7 +33,7 @@ Enter the same values as for any soft-phone (see [`../local/README.md`](../local
 - **Password:** `SOFTPHONE_PASSWORD`
 - **Push registration port:** `DEVICE_PORT` (default `8081`), where the app sends its PushKit token
 
-Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. The password is stored in the Keychain (readable after first unlock, so a push can register the app while locked); the rest in `UserDefaults`. Allow Local Network and Microphone access when prompted. Answering from the banner or lock screen is handled by iOS, which may bring the app to the foreground; the app does nothing to request that and keeps the call running either way. Once registered, the app registers again on launch, in the foreground, and on each push until you tap Unregister.
+Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. The password is stored in the Keychain (readable after first unlock, so a push can register the app while locked); the rest in `UserDefaults`. Allow Local Network and Microphone access when prompted. Answering from the banner or lock screen is handled by iOS, which may bring the app to the foreground; the app does nothing to request that and keeps the call running either way. Whenever iOS opens the app on answer (or you open it mid-call), `ContentView` shows a full-screen call screen instead of the settings form: "Claude", "Ringing" with Answer and Decline while ringing in-app, then "On a call" with a live timer and a red End button. The settings form returns when the call ends. Once registered, the app registers again on launch, in the foreground, and on each push until you tap Unregister.
 
 ## Debugging push and CallKit
 
@@ -57,7 +57,8 @@ log show x.logarchive --predicate 'subsystem == "dev.willsawyerrrr.phone-claude"
 - `CallKitController.swift`, `VoIPPush.swift` — thin CallKit and PushKit wrappers; CallKit activates the audio session for Linphone.
 - `DeviceRegistration.swift` — builds the token registration request.
 - `SIPConfig.swift`, `Keychain.swift` — connection settings and their persistence.
-- `ContentView.swift` — settings form, registration status, and answer/decline/hang-up controls.
+- `ContentView.swift` — settings form and registration status; shows `CallView` while a call exists.
+- `CallView.swift`, `CallPresentation.swift` — the in-call screen, the pure mapping from call state to what it shows, and the call timer.
 - `PhoneClaudeTests/` — unit tests for the above that need no device.
 
 ## TestFlight
