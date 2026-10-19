@@ -25,6 +25,7 @@ final class SIPClient {
     private(set) var registration = Registration.unregistered
     private(set) var error: String?
     var callState: CallState { calls.state }
+    let speaker = SpeakerRoute()
     /// Whether a core exists that is not on its way out, whatever its registration state.
     var isRunning: Bool { core != nil && !shutdown.isDeregistering }
 
@@ -61,6 +62,9 @@ final class SIPClient {
                 onCallStateChanged: { [weak self] _, call, state, _ in
                     MainActor.assumeIsolated { self?.callChanged(call, state) }
                 },
+                onAudioDeviceChanged: { [weak self] _, _ in
+                    MainActor.assumeIsolated { self?.speaker.refresh() }
+                },
                 onAccountRegistrationStateChanged: { [weak self] _, _, state, message in
                     MainActor.assumeIsolated { self?.registrationChanged(state, message) }
                 }
@@ -90,6 +94,7 @@ final class SIPClient {
         }
         self.core = core
         self.delegate = delegate
+        if let core { speaker.routing = LinphoneAudioRouting(core: core) }
         UIApplication.shared.isIdleTimerDisabled = true
     }
 
@@ -124,6 +129,7 @@ final class SIPClient {
         if let core, let delegate { core.removeDelegate(delegate: delegate) }
         core?.stop()
         core = nil
+        speaker.routing = nil
         delegate = nil
         call = nil
         calls.reset()
@@ -197,6 +203,8 @@ final class SIPClient {
             }
         case .Connected, .StreamsRunning:
             calls.connected(id, with: peer)
+        case .End, .Error:
+            if calls.current == id { speaker.reset() }
         case .Released:
             // The media stream is gone only once the call is released.
             guard calls.current == id else { break }

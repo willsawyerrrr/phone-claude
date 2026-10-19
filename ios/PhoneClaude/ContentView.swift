@@ -9,7 +9,8 @@ struct ContentView: View {
     var body: some View {
         if let presentation = CallPresentation.of(client.callState, callKit: model.callKitPhase) {
             CallView(
-                presentation: presentation, state: client.callState, onAnswer: model.answer, onEnd: model.hangUp)
+                presentation: presentation, state: client.callState, speaker: client.speaker,
+                onAnswer: model.answer, onEnd: model.hangUp)
         } else {
             settings
         }

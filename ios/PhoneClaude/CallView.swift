@@ -4,6 +4,7 @@ import SwiftUI
 struct CallView: View {
     let presentation: CallPresentation
     let state: SIPClient.CallState
+    let speaker: SpeakerRoute
     let onAnswer: () -> Void
     let onEnd: () -> Void
     @State private var timer = CallTimer()
@@ -28,6 +29,7 @@ struct CallView: View {
                     .accessibilityIdentifier("call.status")
             }
             Spacer()
+            if presentation.showsSpeaker { speakerButton }
             if presentation.showsAnswer {
                 HStack(spacing: 24) {
                     button("Decline", "phone.down.fill", .red, onEnd)
@@ -43,6 +45,26 @@ struct CallView: View {
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onChange(of: state, initial: true) { _, state in timer.update(state) }
+    }
+
+    private var speakerButton: some View {
+        let speakerPresentation = SpeakerPresentation(isOn: speaker.isOn)
+        return Button(action: speaker.toggle) {
+            VStack(spacing: 8) {
+                Image(systemName: speakerPresentation.symbol)
+                    .font(.title)
+                    .frame(width: 64, height: 64)
+                    .background(speaker.isOn ? Color.white : Color.white.opacity(0.2), in: Circle())
+                    .foregroundStyle(speaker.isOn ? Color.black : Color.white)
+                Text(speakerPresentation.label).font(.callout)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 32)
+        .accessibilityLabel(speakerPresentation.label)
+        .accessibilityValue(speakerPresentation.value)
+        .accessibilityAddTraits(speaker.isOn ? .isSelected : [])
+        .accessibilityIdentifier(speakerPresentation.identifier)
     }
 
     private func button(_ title: String, _ icon: String, _ color: Color, _ action: @escaping () -> Void) -> some View {
@@ -63,10 +85,10 @@ struct CallView: View {
 
 #Preview("Ringing") {
     CallView(
-        presentation: .of(.ringing(from: "Claude"))!, state: .ringing(from: "Claude"), onAnswer: {}, onEnd: {})
+        presentation: .of(.ringing(from: "Claude"))!, state: .ringing(from: "Claude"), speaker: SpeakerRoute(), onAnswer: {}, onEnd: {})
 }
 
 #Preview("Active") {
     CallView(
-        presentation: .of(.active(with: "Claude"))!, state: .active(with: "Claude"), onAnswer: {}, onEnd: {})
+        presentation: .of(.active(with: "Claude"))!, state: .active(with: "Claude"), speaker: SpeakerRoute(), onAnswer: {}, onEnd: {})
 }

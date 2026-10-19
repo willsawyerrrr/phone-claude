@@ -7,6 +7,9 @@ struct CallPresentation: Equatable {
     let showsTimer: Bool
     let showsAnswer: Bool
 
+    /// Whether the speaker toggle shows, which is while the call is connected.
+    var showsSpeaker: Bool { showsTimer }
+
     /// The in-call screen for the SIP call `state` together with the CallKit call's `phase`, or `nil` when
     /// there is no call and the settings screen shows.
     static func of(
