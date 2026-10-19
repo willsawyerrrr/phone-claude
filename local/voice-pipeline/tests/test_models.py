@@ -22,7 +22,7 @@ def test_windows_are_run_as_enough_audio_arrives():
     session = FakeSession(0.9)
     vad = SileroVad(session, threshold=0.5)
 
-    # 160 samples per frame: the first frame is short of a 256-sample window.
+    # 320 samples per frame: the first frame is short of a 512-sample window.
     assert not vad.is_speech(FRAME)
     assert session.inputs == []
     assert vad.is_speech(FRAME)
@@ -35,7 +35,7 @@ def test_verdict_holds_until_the_next_window_completes():
 
     vad.is_speech(FRAME)
     assert vad.is_speech(FRAME)
-    assert vad.is_speech(FRAME)  # 64 samples pending; still the last verdict
+    assert vad.is_speech(FRAME)  # 448 samples pending; still the last verdict
     assert not vad.is_speech(FRAME)  # completes a second window
 
 

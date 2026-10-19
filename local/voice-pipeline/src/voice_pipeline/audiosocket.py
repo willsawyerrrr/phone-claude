@@ -1,7 +1,7 @@
 """Asterisk AudioSocket wire protocol.
 
 Each frame is a 1-byte kind, a 2-byte big-endian payload length, and the
-payload. Audio is 8 kHz, 16-bit signed linear PCM, mono.
+payload. Audio is 16 kHz, 16-bit signed linear PCM, mono.
 """
 
 import asyncio
@@ -10,7 +10,7 @@ from typing import Protocol
 
 KIND_HANGUP = 0x00
 KIND_UUID = 0x01
-KIND_AUDIO = 0x10
+KIND_AUDIO = 0x12  # slin16
 KIND_ERROR = 0xFF
 
 

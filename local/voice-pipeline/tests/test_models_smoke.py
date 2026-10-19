@@ -26,7 +26,7 @@ def frames(pcm: bytes) -> list[bytes]:
     return [pcm[i : i + FRAME_BYTES] for i in range(0, len(pcm), FRAME_BYTES)]
 
 
-def test_synthesised_speech_is_8khz_audio(spoken):
+def test_synthesised_speech_is_16khz_audio(spoken):
     assert 1.0 < len(spoken) / 16000 < 5.0
     assert np.abs(np.frombuffer(spoken, dtype=np.int16)).max() > 1000
 

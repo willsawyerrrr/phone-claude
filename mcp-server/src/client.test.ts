@@ -141,6 +141,7 @@ describe("client", () => {
         extension: "700",
         priority: "1",
         channelId: callId,
+        formats: "g722,ulaw,alaw",
         timeout: "60",
       });
       expect(JSON.parse(originate!.body)).toEqual({

@@ -332,7 +332,7 @@ async def test_audio_is_sent_in_whole_frames_at_real_time_pace(settings):
     elapsed = time.monotonic() - started
 
     assert elapsed >= 0.15
-    assert {len(frame) for frame in channel.sent_audio} == {320}
+    assert {len(frame) for frame in channel.sent_audio} == {640}
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
 

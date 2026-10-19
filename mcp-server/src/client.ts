@@ -52,6 +52,7 @@ export async function startCall(
         extension: config.dialplanExtension,
         priority: "1",
         channelId: callId,
+        formats: "g722,ulaw,alaw",
         timeout: String(config.ringTimeoutS),
       })}`,
       {

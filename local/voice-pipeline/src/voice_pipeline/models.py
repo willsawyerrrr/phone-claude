@@ -8,11 +8,10 @@ import soxr
 
 from voice_pipeline.config import SAMPLE_RATE
 
-WHISPER_RATE = 16000
-# Silero VAD's fixed window at 8 kHz, and the trailing samples of the
+# Silero VAD's fixed window at 16 kHz, and the trailing samples of the
 # previous window it expects prepended to each one.
-VAD_WINDOW = 256
-VAD_CONTEXT = 32
+VAD_WINDOW = 512
+VAD_CONTEXT = 64
 
 
 class _OnnxSession(Protocol):
@@ -20,7 +19,7 @@ class _OnnxSession(Protocol):
 
 
 class SileroVad:
-    """Silero VAD (ONNX, no torch), run natively at 8 kHz.
+    """Silero VAD (ONNX, no torch), run natively at 16 kHz.
 
     Audio arrives in 20 ms frames but the model takes 32 ms windows, so
     samples are buffered and `is_speech` reports the latest window's verdict.
@@ -81,8 +80,7 @@ class WhisperTranscriber:
 
     def transcribe(self, pcm: bytes) -> str:
         samples = np.frombuffer(pcm, dtype=np.int16)
-        audio = soxr.resample(samples, SAMPLE_RATE, WHISPER_RATE).astype(np.float32)
-        audio /= 32768.0
+        audio = samples.astype(np.float32) / 32768.0
         segments, _ = self._model.transcribe(
             audio,
             language="en",

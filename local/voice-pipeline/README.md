@@ -4,7 +4,7 @@ Speaks a question over an Asterisk AudioSocket call and captures the spoken repl
 
 ## Interface
 
-**AudioSocket** (`:9092`, inside the Docker network only). Asterisk connects when the call is answered. Audio is 8 kHz, 16-bit signed linear PCM, mono, 20 ms frames; the connection's UUID is the call ID. A UUID with no pending prompt is rejected: the pipeline hangs up the connection.
+**AudioSocket** (`:9092`, inside the Docker network only). Asterisk connects when the call is answered. Audio is 16 kHz, 16-bit signed linear PCM (kind `0x12`), mono, 20 ms (640-byte) frames; the connection's UUID is the call ID. A UUID with no pending prompt is rejected: the pipeline hangs up the connection.
 
 **HTTP** (`:8080`, published to loopback):
 
@@ -35,7 +35,7 @@ On `SIGTERM` or `SIGINT` the pipeline stops accepting audio connections, hangs u
 
 | Stage | Model                                                                       | Why                                                                                                                |
 | ----- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| VAD   | [Silero VAD](https://github.com/snakers4/silero-vad) v5 (ONNX)              | Runs natively at 8 kHz on `onnxruntime`, with no torch. Pinned by checksum in the `Dockerfile`.                    |
+| VAD   | [Silero VAD](https://github.com/snakers4/silero-vad) v5 (ONNX)              | Runs natively at 16 kHz on `onnxruntime`, with no torch. Pinned by checksum in the `Dockerfile`.                   |
 | STT   | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) `base.en`, int8 | About 150 MB and around a second for a short reply on CPU; noticeably more accurate than `tiny.en` on phone audio. |
 | TTS   | [Piper](https://github.com/OHF-Voice/piper1-gpl) `en_US-lessac-medium`      | About 60 MB and faster than real time on CPU; Kokoro sounds more natural but is heavier.                           |
 
