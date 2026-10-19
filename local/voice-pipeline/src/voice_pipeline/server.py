@@ -162,7 +162,7 @@ class Pipeline:
         try:
             body = await request.json()
             device = parse_device(body["token"], body["environment"])
-        except (ValueError, KeyError, TypeError):
+        except ValueError, KeyError, TypeError:
             return web.json_response(
                 {
                     "error": "Body must be {token: hex string, "
@@ -186,7 +186,7 @@ class Pipeline:
                 raise ValueError("question")
             if context is not None and not isinstance(context, str):
                 raise ValueError("context")
-        except (ValueError, KeyError, TypeError, AttributeError):
+        except ValueError, KeyError, TypeError, AttributeError:
             return web.json_response(
                 {
                     "error": "Body must be {callId: uuid, question: string, "

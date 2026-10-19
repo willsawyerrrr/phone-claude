@@ -2,7 +2,7 @@
 name = "voice-pipeline"
 version = "0.1.0"
 description = "Speaks a question over an Asterisk AudioSocket call and captures the spoken reply."
-requires-python = ">=3.12"
+requires-python = "==3.14.*"
 dependencies = [
   "aiohttp>=3.10",
   "cryptography>=43",

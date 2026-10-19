@@ -123,7 +123,7 @@ class ApnsPusher:
             return
         try:
             reason = str(response.json()["reason"])
-        except (ValueError, KeyError, TypeError):
+        except ValueError, KeyError, TypeError:
             reason = f"HTTP {response.status_code}"
         if response.status_code == 410 or reason in DEAD_TOKEN_REASONS:
             self._devices.clear(device.token)
