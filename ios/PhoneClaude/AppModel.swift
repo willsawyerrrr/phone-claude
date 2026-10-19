@@ -64,7 +64,7 @@ final class AppModel {
     func disable() {
         SIPConfig.registrationEnabled = false
         guard !callInProgress else { return }
-        client.unregister()
+        stopClient()
     }
 
     private var callInProgress: Bool {
@@ -84,7 +84,12 @@ final class AppModel {
     /// Stops the SIP client while the app is in the background with no call, so the phone is offline.
     func suspendIfBackground() {
         guard UIApplication.shared.applicationState != .active, !callInProgress else { return }
-        client.unregister()
+        stopClient()
+    }
+
+    /// Un-registers and stops the SIP client, unless a call has appeared by the time it would stop.
+    private func stopClient() {
+        client.deregisterThenStop { [weak self] in self.map { !$0.callInProgress } ?? true }
     }
 
     // MARK: Push
@@ -138,7 +143,7 @@ final class AppModel {
     private func callEnded() {
         timeout.cancel()
         if let id = kitCalls.inviteEnded() { callKit.reportEnded(id, reason: .remoteEnded) }
-        if !SIPConfig.registrationEnabled { client.unregister() }
+        if !SIPConfig.registrationEnabled { stopClient() }
         suspendIfBackground()
     }
 

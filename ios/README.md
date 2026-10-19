@@ -2,7 +2,7 @@
 
 A SwiftUI SIP soft-phone that registers to the local Asterisk stack (`../local/`) as its PJSIP endpoint and answers `ask_by_phone` calls. SIP and media come from the [Linphone SDK](https://github.com/BelledonneCommunications/linphone-sdk-swift-ios) (AGPL-3.0, audio-only build), added as a Swift package.
 
-Calls ring through CallKit, including from the lock screen. The app stops its SIP client when backgrounded, so Asterisk sees it offline and `mcp-server` has the stack send a PushKit VoIP push. The app reports a CallKit call for every push, re-registers over the LAN, and answers the SIP INVITE when you accept in the native call UI. The phone must be on the LAN. The screen is kept awake while registered in the foreground.
+Calls ring through CallKit, including from the lock screen. The app un-registers and stops its SIP client when backgrounded, so Asterisk sees it offline at once and `mcp-server` has the stack send a PushKit VoIP push. The app reports a CallKit call for every push, re-registers over the LAN, and answers the SIP INVITE when you accept in the native call UI. The phone must be on the LAN. The screen is kept awake while registered in the foreground.
 
 ## Build
 
