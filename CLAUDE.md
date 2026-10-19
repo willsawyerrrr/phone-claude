@@ -30,7 +30,7 @@ Asterisk drops a quiet AudioSocket connection. See `local/README.md` and
 `ios/` is a SwiftUI soft-phone (not a pnpm package; the Xcode project is
 generated from `ios/project.yml` with XcodeGen) that registers to `asterisk`
 as the `SOFTPHONE_USERNAME` endpoint and answers calls, using the Linphone SDK
-for SIP and media. It rings from the lock screen: the app stops its SIP client in
+for SIP and media. It rings from the lock screen: the app un-registers and stops its SIP client in
 the background, so Asterisk sees the endpoint offline, and a PushKit VoIP
 push wakes it; every push is reported to CallKit at once, then the app
 re-registers over the LAN and answers the INVITE when the user accepts. It

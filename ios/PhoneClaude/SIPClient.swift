@@ -25,8 +25,8 @@ final class SIPClient {
     private(set) var registration = Registration.unregistered
     private(set) var error: String?
     var callState: CallState { calls.state }
-    /// Whether a core exists, whatever its registration state.
-    var isRunning: Bool { core != nil }
+    /// Whether a core exists that is not on its way out, whatever its registration state.
+    var isRunning: Bool { core != nil && !shutdown.isDeregistering }
 
     /// Called when an incoming call is accepted for ringing, with the caller.
     @ObservationIgnored var onIncoming: (@MainActor (String) -> Void)?
@@ -36,6 +36,9 @@ final class SIPClient {
     @ObservationIgnored private var core: Core?
     @ObservationIgnored private var delegate: CoreDelegateStub?
     @ObservationIgnored private var call: Call?
+    @ObservationIgnored private var shutdown = DeregistrationSequence()
+    @ObservationIgnored private var shutdownTimeout: Task<Void, Never>?
+    @ObservationIgnored private var canStop: (@MainActor () -> Bool)?
     private var calls = CallTracker<ObjectIdentifier>()
 
     /// Registers as `config`'s user, replacing any existing registration.
@@ -90,8 +93,34 @@ final class SIPClient {
         UIApplication.shared.isIdleTimerDisabled = true
     }
 
+    /// Un-registers the account, then stops the core once Asterisk has dropped the contact or a short timeout
+    /// passes, so the endpoint goes offline at once.
+    ///
+    /// The core is stopped on a later main-queue turn, outside Linphone's notification. If `canStop` is false by
+    /// then (a call has appeared), the core is kept and registers again. A later `register(_:)` or
+    /// `unregister()` supersedes the shutdown.
+    func deregisterThenStop(canStop: @escaping @MainActor () -> Bool) {
+        guard let core else { return }
+        self.canStop = canStop
+        switch shutdown.begin(registration: registration) {
+        case .none: break
+        case .stop: stopIfAllowed()
+        case .deregister:
+            setRegistrationEnabled(false, on: core)
+            shutdownTimeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: DeregistrationSequence.timeout)
+                guard !Task.isCancelled, let self else { return }
+                handle(shutdown.timedOut())
+            }
+        }
+    }
+
     /// Stops the core and returns to `.unregistered`, discarding any call and error.
     func unregister() {
+        shutdown.cancel()
+        shutdownTimeout?.cancel()
+        shutdownTimeout = nil
+        canStop = nil
         if let core, let delegate { core.removeDelegate(delegate: delegate) }
         core?.stop()
         core = nil
@@ -118,7 +147,35 @@ final class SIPClient {
         do { try call?.terminate() } catch { self.error = error.localizedDescription }
     }
 
+    private func handle(_ action: DeregistrationSequence.Action) {
+        if action == .stop { stopIfAllowed() }
+    }
+
+    private func stopIfAllowed() {
+        shutdownTimeout?.cancel()
+        shutdownTimeout = nil
+        if canStop?() ?? true {
+            unregister()
+        } else if let core {
+            setRegistrationEnabled(true, on: core)
+        }
+        canStop = nil
+    }
+
+    private func setRegistrationEnabled(_ enabled: Bool, on core: Core) {
+        guard let account = core.defaultAccount, let params = account.params?.clone() else { return }
+        params.registerEnabled = enabled
+        account.params = params
+    }
+
     private func registrationChanged(_ state: RegistrationState, _ message: String) {
+        if state == .Cleared || state == .None, shutdown.isDeregistering {
+            // The core must not be stopped inside Linphone's own notification.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                handle(shutdown.cleared())
+            }
+        }
         switch state {
         case .Ok: registration = .registered
         case .Failed: registration = .failed(message)
