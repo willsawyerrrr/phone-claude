@@ -51,6 +51,7 @@ log show x.logarchive --predicate 'subsystem == "dev.willsawyerrrr.phone-claude"
 - `InviteTimer.swift` — runs the 30 s wait for a pushed call's INVITE on the main actor. `AppModel` and `SIPClient` are `@MainActor`, since they touch UIKit and observed state; PushKit, CallKit and Linphone callbacks all arrive on the main queue and enter them via `MainActor.assumeIsolated`.
 - `SIPClient.swift` — wraps the Linphone `Core`: registers, tracks registration and call state, answers and hangs up. A failed registration is stopped and can be retried. The core is never stopped inside a Linphone notification: the end of a call is reported on a later main-queue turn, once the call is released.
 - `RegistrationPolicy.swift` — the core is started only when none is running and never stopped or replaced while a SIP or CallKit call exists, so foregrounding mid-call leaves the call alone.
+- `CodecPolicy.swift` — enables G.722 on the core and puts it ahead of PCMU and PCMA, so calls are answered with 16 kHz wideband audio when the INVITE offers it.
 - `CallTracker.swift` — tracks the single current SIP call; a second incoming call is declined as busy.
 - `CallKitCalls.swift` — matches a push's CallKit call to its SIP INVITE and decides what to answer, decline, or end.
 - `Log.swift` — the `push` and `callkit` loggers.
