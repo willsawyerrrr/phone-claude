@@ -11,7 +11,9 @@ pnpm workspace with one package:
   stderr, then imports `dist/index.js`) is what the root `.mcp.json` and the
   root `bin` entry launch; `mcp-server/src/shim.test.ts` exercises it.
 
-`local/` is that stack's Docker Compose definition (not a pnpm package). The
+`local/` is that stack's Docker Compose definition (not a pnpm package). Start
+it with `local/up.sh`, which detects the Mac's LAN IP and exports it as
+`HOST_LAN_IP` (it overrides `.env`); `local/test-up.sh` tests the detection. The
 `asterisk` service renders its config from env at container start
 (`local/asterisk/render-config.sh`), so it runs unchanged on any host. It has
 one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
@@ -45,6 +47,7 @@ sends its PushKit token to the pipeline's device endpoint. See `ios/README.md`.
 - Voice pipeline (`ruff` + `pytest`):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.
+- Stack start script: `shellcheck local/up.sh local/test-up.sh && local/test-up.sh`.
 - iOS (CI and the TestFlight deploy both pin `macos-26` and Xcode 26.6, the
   newest GA Xcode on GitHub's runners): in `ios/`, `xcodegen generate`, then
   `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude
