@@ -84,4 +84,10 @@ final class CallTimerTests: XCTestCase {
         XCTAssertNil(timer.startedAt)
         XCTAssertEqual(timer.elapsed(at: t0 + 20), 0)
     }
+
+    func testSpeakerShowsOnlyWhileConnected() {
+        XCTAssertTrue(CallPresentation.of(.active(with: "x"))!.showsSpeaker)
+        XCTAssertFalse(CallPresentation.of(.ringing(from: "x"))!.showsSpeaker)
+        XCTAssertFalse(CallPresentation.of(.idle, callKit: .answered)!.showsSpeaker)
+    }
 }
