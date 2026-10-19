@@ -7,12 +7,22 @@ struct CallPresentation: Equatable {
     let showsTimer: Bool
     let showsAnswer: Bool
 
-    /// The in-call screen for `state`, or `nil` when there is no call and the settings screen shows.
-    static func of(_ state: SIPClient.CallState, caller: String = "Claude") -> CallPresentation? {
-        switch state {
-        case .idle: nil
-        case .ringing: CallPresentation(caller: caller, status: "Ringing", showsTimer: false, showsAnswer: true)
-        case .active: CallPresentation(caller: caller, status: "On a call", showsTimer: true, showsAnswer: false)
+    /// The in-call screen for the SIP call `state` together with the CallKit call's `phase`, or `nil` when
+    /// there is no call and the settings screen shows.
+    static func of(
+        _ state: SIPClient.CallState, callKit phase: CallKitCalls.Phase = .none, caller: String = "Claude"
+    ) -> CallPresentation? {
+        let ringing = CallPresentation(caller: caller, status: "Ringing", showsTimer: false, showsAnswer: true)
+        let connecting = CallPresentation(caller: caller, status: "Connecting…", showsTimer: false, showsAnswer: false)
+        switch (state, phase) {
+        case (.active, _):
+            return CallPresentation(caller: caller, status: "On a call", showsTimer: true, showsAnswer: false)
+        case (.ringing, .answered), (.idle, .answered):
+            return connecting
+        case (.ringing, _), (.idle, .ringing):
+            return ringing
+        case (.idle, .none):
+            return nil
         }
     }
 }

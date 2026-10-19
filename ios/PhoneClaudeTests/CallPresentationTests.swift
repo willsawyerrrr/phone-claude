@@ -18,6 +18,44 @@ final class CallPresentationTests: XCTestCase {
     }
 }
 
+final class CallPresentationCallKitTests: XCTestCase {
+    func testCallKitRingingBeforeInviteShowsRinging() {
+        XCTAssertEqual(CallPresentation.of(.idle, callKit: .ringing)?.status, "Ringing")
+        XCTAssertEqual(CallPresentation.of(.idle, callKit: .ringing)?.showsAnswer, true)
+    }
+
+    func testCallKitAnsweredBeforeInviteShowsConnecting() {
+        let p = CallPresentation.of(.idle, callKit: .answered)
+        XCTAssertEqual(p, CallPresentation(caller: "Claude", status: "Connecting…", showsTimer: false, showsAnswer: false))
+    }
+
+    func testAnsweredInviteStillConnectingUntilActive() {
+        XCTAssertEqual(CallPresentation.of(.ringing(from: "x"), callKit: .answered)?.status, "Connecting…")
+    }
+
+    func testSIPActiveShowsTimerWhateverCallKitSays() {
+        for phase in [CallKitCalls.Phase.none, .ringing, .answered] {
+            XCTAssertEqual(CallPresentation.of(.active(with: "x"), callKit: phase)?.showsTimer, true)
+        }
+    }
+
+    func testEndedShowsSettings() {
+        XCTAssertNil(CallPresentation.of(.idle, callKit: .none))
+    }
+
+    func testPhase() {
+        var calls = CallKitCalls()
+        XCTAssertEqual(calls.phase, .none)
+        let id = UUID()
+        _ = calls.pushed(id)
+        XCTAssertEqual(calls.phase, .ringing)
+        _ = calls.answered(id)
+        XCTAssertEqual(calls.phase, .answered)
+        calls.reset()
+        XCTAssertEqual(calls.phase, .none)
+    }
+}
+
 final class CallTimerTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1000)
 

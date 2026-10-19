@@ -22,7 +22,19 @@ struct CallKitCalls {
         case waitForInvite
     }
 
+    enum Phase: Equatable {
+        case none
+        /// Reported to CallKit, not yet answered.
+        case ringing
+        /// Answered in CallKit.
+        case answered
+    }
+
     private(set) var current: UUID?
+
+    var phase: Phase {
+        current == nil ? .none : isAnswered ? .answered : .ringing
+    }
     private var hasInvite = false
     private var isAnswered = false
     private var isDeclined = false
