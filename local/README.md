@@ -1,6 +1,6 @@
 # Local voice stack
 
-A Docker Compose stack that rings a SIP soft-phone on the local network, with no carrier involved. It runs on any machine with Docker; everything host-specific comes from `.env`.
+A Docker Compose stack that rings a SIP soft-phone on the local network, with no carrier involved. It runs on any machine with Docker; everything host-specific comes from `.env` or, for `HOST_LAN_IP`, `up.sh`.
 
 Services:
 
@@ -12,12 +12,16 @@ The AudioSocket connection is made only once the phone answers.
 ## Setup
 
 ```sh
-cp .env.example .env   # set HOST_LAN_IP, SOFTPHONE_PASSWORD, ARI_PASSWORD
-docker compose up -d --build   # the first build downloads the speech models (~1.2 GB image)
+cp .env.example .env   # set SOFTPHONE_PASSWORD, ARI_PASSWORD
+./up.sh                # the first build downloads the speech models (~1.2 GB image)
 docker compose ps      # asterisk and voice-pipeline should report "healthy"
 ```
 
-`HOST_LAN_IP` is this machine's LAN address as the phone reaches it (`ipconfig getifaddr en0` on macOS, `hostname -I` on Linux). Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this machine.
+`up.sh` detects this machine's current LAN IPv4 (the default-route interface, else `en0`/`en1`; never a tunnel, VPN or Docker interface), prints it, exports it as `HOST_LAN_IP`, and runs `docker compose up -d --build "$@"`. Re-run it after the IP changes: Compose recreates the containers whose configuration changed. `./up.sh --print` only prints the IP. `HOST_LAN_IP=<ip> ./up.sh` overrides detection; it fails if no IP is found.
+
+`HOST_LAN_IP` is this machine's LAN address as the phone reaches it. Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this machine, and the device-registration port (`DEVICE_PORT`) is published on it. An exported `HOST_LAN_IP` takes precedence over `.env`, so leave it out of `.env`; a bare `docker compose` command reads only `.env` and fails without it.
+
+`./test-up.sh` tests the detection against stubbed `route` and `ipconfig`.
 
 Published ports: SIP `SIP_PORT` (UDP and TCP), RTP `RTP_START`–`RTP_END` (UDP, 1:1), and ARI `ARI_PORT` on `ARI_BIND_ADDRESS` (loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on.
 
@@ -29,7 +33,7 @@ Install a SIP app on the phone (Groundwire, Linphone, Zoiper, or the [`ios/`](..
 
 - **Username / auth username:** `SOFTPHONE_USERNAME` (default `phone`)
 - **Password:** `SOFTPHONE_PASSWORD`
-- **Domain / server:** `HOST_LAN_IP`, port `SIP_PORT`
+- **Domain / server:** the IP `up.sh` prints (`HOST_LAN_IP`), port `SIP_PORT`
 - **Transport:** UDP (TCP also works)
 
 `mcp-server`'s `SIP_ENDPOINT` must equal `SOFTPHONE_USERNAME`, and its `ARI_USERNAME`/`ARI_PASSWORD` the stack's.
@@ -41,6 +45,10 @@ docker compose exec asterisk asterisk -rx 'pjsip show contacts'
 ```
 
 The contact should be `Avail`. The `ios/` app unregisters when backgrounded, so the contact is `Unavail` or absent until a VoIP push wakes it. For a third-party app, a locked or backgrounded phone only rings if the app has working push notifications; test that on the actual phone before relying on it.
+
+### Surviving IP changes
+
+The Mac's Bonjour name (`scutil --get LocalHostName`, resolved as `<LocalHostName>.local`) does not change with DHCP, so it can be entered in the app's host field instead of the IP. Not verified: that the app's SIP registration and token upload resolve a `.local` name. Whatever the app uses, `./up.sh` must still be re-run after an IP change, because Asterisk advertises and Docker binds the IP.
 
 ## Ringing a locked phone
 

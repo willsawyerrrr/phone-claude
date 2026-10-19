@@ -74,8 +74,8 @@ Asterisk which address to advertise:
   the SDP connection address.
 - Set `rtp_symmetric`, `force_rport`, and `direct_media=no` on the endpoint so
   audio flows back to whatever source address the phone's packets arrive from.
-- `HOST_LAN_IP` is the host's current LAN address; it is updated when DHCP
-  reassigns it (or reserved on the router).
+- `HOST_LAN_IP` is the host's current LAN address; `local/up.sh` detects it and
+  exports it on each start, so a DHCP change needs only a re-run.
 - `voice-pipeline`'s API (`8080`) is published to `localhost` only, and its
   device-registration port (`8081`) to `HOST_LAN_IP`;
   AudioSocket (`9092`) is reachable only inside the Docker network.
