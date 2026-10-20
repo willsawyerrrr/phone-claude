@@ -44,6 +44,7 @@ services:
       MAX_REPEATS: ${MAX_REPEATS:-3}
       CALL_TTL_S: ${CALL_TTL_S:-3600}
       VAD_THRESHOLD: ${VAD_THRESHOLD:-0.5}
+      LOUDNESS_MARGIN_DB: ${LOUDNESS_MARGIN_DB:-12}
       CAPTURE_DIR: ${CAPTURE_DIR:+/captures}
       TTS_VOICE: ${TTS_VOICE:-alba-casual}
       APNS_KEY_ID: ${APNS_KEY_ID:-}

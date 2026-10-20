@@ -12,7 +12,10 @@ A policy is `name=key:value,...` with keys `on` (speech probability to start
 speech, default 0.5), `off` (to stay in speech, default `on`), `min` (seconds
 of speech before a reply counts as started, default 0), `smooth` (frames in the
 probability moving average, default 1), `gate` (dBFS below which a frame is
-never speech, default none) and `quiet` (seconds of quiet that end the reply,
+never speech, default none), `rel` (dB below the loudest speech so far under
+which a frame is never speech, default none; the pipeline's
+`LOUDNESS_MARGIN_DB`), `decay` (dB per second the loudest level fades, default
+1) and `quiet` (seconds of quiet that end the reply,
 default 1.5).
 """
 
@@ -25,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 from voice_pipeline.config import FRAME_BYTES, SAMPLE_RATE, Settings
+from voice_pipeline.loudness import RelativeLoudnessGate
 from voice_pipeline.models import SileroVad, WhisperTranscriber
 
 FRAME_S = FRAME_BYTES / (SAMPLE_RATE * 2)
@@ -32,13 +36,14 @@ PREROLL_S = 0.2
 
 DEFAULT_POLICIES = [
     "baseline=on:0.5",
-    "on0.6=on:0.6",
     "on0.7=on:0.7",
-    "on0.8=on:0.8",
     "hyst=on:0.7,off:0.4",
     "hyst+min=on:0.7,off:0.4,min:0.3",
     "smooth=on:0.7,off:0.4,min:0.3,smooth:5",
-    "gate=on:0.7,off:0.4,min:0.3,gate:-45",
+    "rel8=rel:8",
+    "rel10=rel:10",
+    "rel12=rel:12",
+    "rel15=rel:15",
 ]
 
 
@@ -50,6 +55,8 @@ class Policy:
     min: float = 0.0
     smooth: int = 1
     gate: float | None = None
+    rel: float | None = None
+    decay: float = 1.0
     quiet: float = 1.5
 
 
@@ -75,19 +82,23 @@ def frame_features(pcm: np.ndarray, vad: SileroVad) -> tuple[np.ndarray, np.ndar
     return np.array(probs), np.array(levels)
 
 
-def replay(policy: Policy, probs, levels) -> tuple[float | None, float | None]:
+def replay(policy: Policy, probs, levels, pcm) -> tuple[float | None, float | None]:
     """Returns when speech started and when the reply would have ended
     (`None` if the audio ran out first)."""
     p = np.convolve(probs, np.ones(policy.smooth) / policy.smooth)[: len(probs)]
     off = policy.on if policy.off is None else policy.off
+    gate = RelativeLoudnessGate(policy.rel or 0, policy.decay)
+    samples = FRAME_BYTES // 2
     active = False
     run_start: int | None = None
     started: int | None = None
     last = 0
     for i, value in enumerate(p):
+        candidate = value >= (off if active else policy.on)
         if policy.gate is not None and levels[i] < policy.gate:
-            value = 0.0
-        active = value >= (off if active else policy.on)
+            candidate = False
+        frame = pcm[i * samples : (i + 1) * samples].tobytes()
+        active = gate.admits(frame, bool(candidate))
         if active:
             if started is None:
                 run_start = i if run_start is None else run_start
@@ -133,7 +144,7 @@ def main() -> None:
     cache: dict[tuple[int, int], str] = {}
     for spec in args.policy or DEFAULT_POLICIES:
         policy = parse_policy(spec)
-        start, end = replay(policy, probs, levels)
+        start, end = replay(policy, probs, levels, pcm)
         if start is None:
             print(f"\n{policy.name}: no speech")
             continue

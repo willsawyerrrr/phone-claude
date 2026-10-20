@@ -17,7 +17,7 @@ from tests.conftest import (
     quiet,
     talk,
 )
-from voice_pipeline.config import Settings
+from voice_pipeline.config import FRAME_BYTES, Settings
 from voice_pipeline.session import REPEAT_PATTERN, CallSession, _RealtimePacer
 from voice_pipeline.store import CallStore, Segment
 
@@ -525,3 +525,15 @@ async def test_nothing_is_recorded_by_default(tmp_path, monkeypatch):
     await session.run()
 
     assert list(tmp_path.iterdir()) == []
+
+
+async def test_quieter_background_speech_does_not_hold_the_reply_open():
+    loud = [b"\x00\x40" * (FRAME_BYTES // 2)] * round(0.4 / 0.02)
+    background = [b"\x01\x00" * (FRAME_BYTES // 2)] * round(3.0 / 0.02)
+    settings = Settings(quiet_period_s=0.5, loudness_margin_db=10)
+    stt = FakeStt("yes")
+    session, _, _ = make_session(FakeChannel(loud + background), stt, settings)
+
+    await session.run()
+
+    assert len(stt.utterances[0]) <= FRAME_BYTES * round(1.2 / 0.02)

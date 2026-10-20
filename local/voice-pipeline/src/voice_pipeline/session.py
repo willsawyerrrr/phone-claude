@@ -10,6 +10,7 @@ from voice_pipeline.audiosocket import KIND_AUDIO, KIND_ERROR, KIND_HANGUP, Chan
 from voice_pipeline.capture import ListenCapture
 from voice_pipeline.config import BYTES_PER_SECOND, FRAME_BYTES, Settings
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
+from voice_pipeline.loudness import RelativeLoudnessGate
 from voice_pipeline.store import CallRecord, CallStore, Segment
 
 log = logging.getLogger(__name__)
@@ -101,6 +102,7 @@ class CallSession:
         self._outbound = bytearray()
         self._outbound_flushed = asyncio.Event()
         self._hung_up = asyncio.Event()
+        self._gate = RelativeLoudnessGate(settings.loudness_margin_db)
         self._listens = 0
         self._capture: ListenCapture | None = None
 
@@ -241,6 +243,7 @@ class CallSession:
         """
         settings = self._settings
         self._vad.reset()
+        self._gate.reset()
         clock = 0.0
         speech_started: float | None = None
         last_speech = 0.0
@@ -267,7 +270,7 @@ class CallSession:
                     return await self._reply_at_hangup(audio, speech_started)
                 clock += len(frame) / BYTES_PER_SECOND
 
-                speech = self._vad.is_speech(frame)
+                speech = self._gate.admits(frame, self._vad.is_speech(frame))
                 if self._capture:
                     self._capture.frame(
                         frame, getattr(self._vad, "probability", None), speech
@@ -307,6 +310,7 @@ class CallSession:
                 audio.clear()
                 preroll.clear()
                 self._vad.reset()
+                self._gate.reset()
 
     async def _reply_at_hangup(
         self, audio: bytearray, speech_started: float | None
