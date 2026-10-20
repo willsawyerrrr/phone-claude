@@ -53,6 +53,11 @@ class SileroVad:
         self._pending = np.zeros(0, dtype=np.float32)
         self._probability = 0.0
 
+    @property
+    def probability(self) -> float:
+        """The latest window's speech probability."""
+        return self._probability
+
     def is_speech(self, pcm: bytes) -> bool:
         samples = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
         self._pending = np.concatenate([self._pending, samples])

@@ -35,7 +35,8 @@ with local Kyutai Pocket TTS (`alba-casual` by default; `TTS_VOICE` selects
 API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. `ARI_BIND_ADDRESS` and
 `PIPELINE_BIND_ADDRESS` (both loopback by default) set the addresses of the
-ARI and pipeline API ports. The same stack runs on a single cloud VM
+ARI and pipeline API ports. Setting `CAPTURE_DIR` records each listening phase's inbound audio and speech detection under `local/captures/` for
+tuning with `local/voice-pipeline/scripts/analyze_capture.py` (off by default; it is the caller's room audio). The same stack runs on a single cloud VM
 (`docs/cloud-deploy.md`): `HOST_LAN_IP` is the VM's public IP, those two ports
 bind to its Tailscale IP, and `mcp-server` on the Mac reaches them over the
 tailnet. See `local/README.md` and `local/voice-pipeline/README.md`.
