@@ -66,7 +66,7 @@ Kokoro loads one model shared by all its voices (about 650 MB resident); each Pi
 
 ## Configuration
 
-Environment variables, all optional (`docker-compose.yml` passes through all except `AUDIOSOCKET_PORT`, `HTTP_PORT`, `MODELS_DIR`, `WHISPER_MODEL`): `NO_INPUT_TIMEOUT_S` (15), `QUIET_PERIOD_S` (3), `MAX_REPLY_S` (60), `MAX_REPEATS` (3), `CALL_TTL_S` (3600), `VAD_THRESHOLD` (0.5), `AUDIOSOCKET_PORT` (9092), `HTTP_PORT` (8080), `MODELS_DIR` (`/models`), `WHISPER_MODEL` (`whisper-base.en`), `TTS_ENGINE` (`piper`; or `kokoro`, `pocket`), `TTS_VOICE` (empty: the engine's default, below).
+Environment variables, all optional (`docker-compose.yml` passes through all except `AUDIOSOCKET_PORT`, `HTTP_PORT`, `MODELS_DIR`, `WHISPER_MODEL`): `NO_INPUT_TIMEOUT_S` (15), `QUIET_PERIOD_S` (1.5), `MAX_REPLY_S` (60), `MAX_REPEATS` (3), `CALL_TTL_S` (3600), `VAD_THRESHOLD` (0.5), `AUDIOSOCKET_PORT` (9092), `HTTP_PORT` (8080), `MODELS_DIR` (`/models`), `WHISPER_MODEL` (`whisper-base.en`), `TTS_ENGINE` (`piper`; or `kokoro`, `pocket`), `TTS_VOICE` (empty: the engine's default, below).
 
 Push: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_FILE` (`/run/secrets/apns_key`), `APNS_TOPIC` (`dev.willsawyerrrr.phone-claude.voip`), `DEVICE_FILE` (`/data/device.json`), `DEVICE_PORT` (8081), `DEVICE_SECRET`.
 

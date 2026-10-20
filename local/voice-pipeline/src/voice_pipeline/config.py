@@ -20,7 +20,7 @@ class Settings:
     # How long to wait for the caller to say anything at all after a prompt.
     no_input_timeout_s: float = 15.0
     # Silence after speech that marks the caller's reply as complete.
-    quiet_period_s: float = 3.0
+    quiet_period_s: float = 1.5
     # Upper bound on one reply, so a caller who never stops can't hold a call.
     max_reply_s: float = 60.0
     # How many times the caller can ask to hear the question again.
