@@ -14,11 +14,16 @@ services:
       SOFTPHONE_PASSWORD: ${SOFTPHONE_PASSWORD:?Set SOFTPHONE_PASSWORD}
       ARI_USERNAME: ${ARI_USERNAME:-phone-claude}
       ARI_PASSWORD: ${ARI_PASSWORD:?Set ARI_PASSWORD}
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:-}
+      TLS_PORT: ${TLS_PORT:-5061}
     ports:
       - "${SIP_PORT:-5060}:5060/udp"
       - "${SIP_PORT:-5060}:5060/tcp"
+      - "${TLS_PORT:-5061}:5061/tcp"
       - "${RTP_START:-10000}-${RTP_END:-10100}:${RTP_START:-10000}-${RTP_END:-10100}/udp"
       - "${ARI_BIND_ADDRESS:-127.0.0.1}:${ARI_PORT:-8088}:8088"
+    volumes:
+      - caddy-data:/caddy-data:ro
     healthcheck:
       test:
         - CMD-SHELL

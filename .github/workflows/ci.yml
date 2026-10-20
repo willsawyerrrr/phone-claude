@@ -40,8 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: shellcheck local/up.sh local/test-up.sh local/audition.sh
+      - run: shellcheck local/up.sh local/test-up.sh local/audition.sh local/test-render-config.sh local/asterisk/render-config.sh local/asterisk/start.sh
       - run: local/test-up.sh
+      - run: local/test-render-config.sh
 
   ios:
     runs-on: macos-26
