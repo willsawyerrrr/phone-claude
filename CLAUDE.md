@@ -25,7 +25,9 @@ prefers G.722 (falling back to `ulaw,alaw`; `mcp-server` passes
 `formats=g722,ulaw,alaw` to ARI so the offer leads with it) and the pipeline
 works in 16 kHz slin. The
 `voice-pipeline` service (`local/voice-pipeline/`, Python) also stores the
-phone's push token (`PUT /device` on the LAN port `DEVICE_PORT`, bearer
+phone's push token (`PUT /device` on the LAN port `DEVICE_PORT`, or over HTTPS at
+`PUBLIC_HOSTNAME` through the optional `caddy` service, enabled by
+`COMPOSE_PROFILES=public`; bearer
 `SOFTPHONE_PASSWORD`, persisted in the `pipeline-data` volume) and sends the
 APNs VoIP push (`POST /push`, loopback). It speaks the question
 with local TTS (Piper by default; Kokoro and Kyutai Pocket TTS are selectable with

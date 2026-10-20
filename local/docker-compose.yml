@@ -56,7 +56,28 @@ services:
       - pipeline-data:/data
     ports:
       - "${PIPELINE_BIND_ADDRESS:-127.0.0.1}:${PIPELINE_PORT:-8080}:8080"
-      - "${HOST_LAN_IP:?Set HOST_LAN_IP to this machine's LAN IP}:${DEVICE_PORT:-8081}:8081"
+      - "${DEVICE_BIND_ADDRESS:-${HOST_LAN_IP:?Set HOST_LAN_IP to this machine's LAN IP}}:${DEVICE_PORT:-8081}:8081"
+
+  # Public HTTPS front for the device endpoint; enabled by `COMPOSE_PROFILES=public`.
+  caddy:
+    profiles: [public]
+    build: ./caddy
+    restart: unless-stopped
+    depends_on:
+      - voice-pipeline
+    environment:
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:-}
+    # Compose interpolates every service, so the profile-only requirement is checked here.
+    command:
+      - sh
+      - -c
+      - >-
+        [ -n "$$PUBLIC_HOSTNAME" ] || { echo "Set PUBLIC_HOSTNAME" >&2; exit 1; };
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    ports:
+      - "443:443"
+    volumes:
+      - caddy-data:/data
 
 secrets:
   apns_key:
@@ -64,3 +85,4 @@ secrets:
 
 volumes:
   pipeline-data:
+  caddy-data:

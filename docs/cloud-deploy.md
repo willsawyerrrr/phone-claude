@@ -1,6 +1,6 @@
 # Cloud deploy
 
-Runs the `local/` stack on one Hetzner Cloud VM for one phone. SIP, RTP and the device endpoint are public; ARI (`8088`) and the pipeline API (`8080`) are reachable only over Tailscale, from the Mac running `mcp-server`.
+Runs the `local/` stack on one Hetzner Cloud VM for one phone. SIP, RTP and the HTTPS device endpoint are public; ARI (`8088`) and the pipeline API (`8080`) are reachable only over Tailscale, from the Mac running `mcp-server`.
 
 ## VM
 
@@ -45,14 +45,13 @@ tailscale ip -4   # the VM's tailnet IP
 
 Hetzner Cloud Firewall, inbound only:
 
-| Protocol | Port        | Purpose                         |
-| -------- | ----------- | ------------------------------- |
-| UDP, TCP | 5060        | SIP (`SIP_PORT`)                |
-| UDP      | 10000-10100 | RTP (`RTP_START`-`RTP_END`)     |
-| TCP      | 8081        | Device endpoint (`DEVICE_PORT`) |
-| TCP      | 443         | HTTPS                           |
+| Protocol | Port        | Purpose                     |
+| -------- | ----------- | --------------------------- |
+| UDP, TCP | 5060        | SIP (`SIP_PORT`)            |
+| UDP      | 10000-10100 | RTP (`RTP_START`-`RTP_END`) |
+| TCP      | 443         | Device endpoint over HTTPS  |
 
-Do not open `22`, `8080` or `8088`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI and the pipeline to the tailnet IP as below.
+Do not open `22`, `8080`, `8081` or `8088`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI and the pipeline to the tailnet IP as below.
 
 ## Stack
 
@@ -69,6 +68,9 @@ SOFTPHONE_PASSWORD=<long random>
 ARI_PASSWORD=<long random>
 ARI_BIND_ADDRESS=<tailnet IP>
 PIPELINE_BIND_ADDRESS=<tailnet IP>
+DEVICE_BIND_ADDRESS=127.0.0.1
+COMPOSE_PROFILES=public
+PUBLIC_HOSTNAME=phone-claude.willsawyerrrr.dev
 LOCAL_NET=127.0.0.0/8
 # APNS_* as in local/README.md; copy the .p8 key to the VM and set APNS_KEY_PATH
 ```
@@ -83,7 +85,7 @@ The override skips `up.sh`'s macOS `route`/`ipconfig` detection, so it works on 
 
 `LOCAL_NET` stays loopback only. On a public host every peer is non-local, so Asterisk gives the phone `HOST_LAN_IP` in SIP and SDP; listing a private range would hand it a container address.
 
-The phone's SIP account and device endpoint use the public IP as server (`SIP_PORT`, `DEVICE_PORT`); see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
+Point a DNS record for `PUBLIC_HOSTNAME` at the VM's public IP before starting; `caddy` obtains its Let's Encrypt certificate on first start (see [`local/README.md`](../local/README.md#public-https-cloud-host)). The phone's SIP account uses the public IP as server (`SIP_PORT`) and the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
 
 ## Mac
 
