@@ -15,7 +15,7 @@ from tests.conftest import (
     quiet,
     talk,
 )
-from voice_pipeline.session import REPEAT_PATTERN, CallSession
+from voice_pipeline.session import REPEAT_PATTERN, CallSession, _RealtimePacer
 from voice_pipeline.store import CallStore, Segment
 
 CALL_ID = "8d1f4c2e-7a3b-4c55-9f0e-2b6a1d3c4e5f"
@@ -336,6 +336,15 @@ async def test_audio_is_sent_in_whole_frames_at_real_time_pace(settings):
     assert {len(frame) for frame in channel.sent_audio} == {640}
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_realtime_pacer_holds_the_rate_despite_per_tick_work():
+    pacer = _RealtimePacer()
+    started = time.monotonic()
+    for _ in range(30):
+        await pacer(0.01)
+        await asyncio.sleep(0.003)
+    assert time.monotonic() - started == pytest.approx(0.3, abs=0.04)
 
 
 class RaisingStt(FakeStt):

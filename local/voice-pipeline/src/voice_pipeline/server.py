@@ -31,7 +31,7 @@ class Pipeline:
         vad_factory: Callable[[], VoiceActivityDetector],
         stt: Transcriber,
         tts: Speaker,
-        pace: Pace = asyncio.sleep,
+        pace: Pace | None = None,
         devices: DeviceStore | None = None,
         pusher: ApnsPusher | None = None,
         voices: SpeakerBank | None = None,
