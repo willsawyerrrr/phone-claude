@@ -2,7 +2,7 @@
 
 A SwiftUI SIP soft-phone that registers to the local Asterisk stack (`../local/`) as its PJSIP endpoint and answers `ask_by_phone` calls. SIP and media come from the [Linphone SDK](https://github.com/BelledonneCommunications/linphone-sdk-swift-ios) (AGPL-3.0, audio-only build), added as a Swift package.
 
-Calls ring through CallKit, including from the lock screen. The app un-registers and stops its SIP client when backgrounded, so Asterisk sees it offline at once and `mcp-server` has the stack send a PushKit VoIP push. The app reports a CallKit call for every push, re-registers over the LAN, and answers the SIP INVITE when you accept in the native call UI. The phone must be on the LAN. The screen is kept awake while registered in the foreground.
+Calls ring through CallKit, including from the lock screen. The app un-registers and stops its SIP client when backgrounded, so Asterisk sees it offline at once and `mcp-server` has the stack send a PushKit VoIP push. The app reports a CallKit call for every push, re-registers, and answers the SIP INVITE when you accept in the native call UI. Over UDP the phone must be on the LAN; over TLS it works from any network. The screen is kept awake while registered in the foreground.
 
 ## Build
 
@@ -28,12 +28,13 @@ Needs a paid Apple Developer account. Debug builds use the APNs sandbox; archive
 
 Enter the same values as for any soft-phone (see [`../local/README.md`](../local/README.md#pairing-the-soft-phone)) and tap Register:
 
-- **Host / port:** `HOST_LAN_IP` / `SIP_PORT`
+- **Connection:** UDP (LAN) for the local stack, TLS for the cloud-hosted one; changing it moves any port still at the old default to the new one's
+- **Host / port:** UDP: `HOST_LAN_IP` / `SIP_PORT` (5060). TLS: the stack's DNS name / 5061
 - **Username:** `SOFTPHONE_USERNAME` (default `phone`)
 - **Password:** `SOFTPHONE_PASSWORD`
-- **Push registration port:** `DEVICE_PORT` (default `8081`), where the app sends its PushKit token
+- **Push registration port:** where the app sends its PushKit token: `DEVICE_PORT` (default `8081`) over `http` for UDP; over TLS, `https://<host>/device` on 443, with a port in the URL only if set to something else
 
-Signalling is UDP, with no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. The password is stored in the Keychain (readable after first unlock, so a push can register the app while locked); the rest in `UserDefaults`. Allow Local Network and Microphone access when prompted. Answering from the banner or lock screen is handled by iOS, which may bring the app to the foreground; the app does nothing to request that and keeps the call running either way. Whenever iOS opens the app on answer (or you open it mid-call), `ContentView` shows a full-screen call screen instead of the settings form: "Claude", "Ringing" with Answer and Decline while ringing in-app, "Connecting…" once answered in CallKit until the SIP call connects, then "On a call" with a live timer, a Speaker toggle and a red End button. Speaker routes through Linphone's output audio device (which applies the AVAudioSession speaker override under CallKit); its state follows `AVAudioSession.routeChangeNotification`, so headphones, Bluetooth and the system call UI keep it in step, and the call returns to the default route when it ends. The settings form returns when the call ends. Once registered, the app registers again on launch, in the foreground, and on each push until you tap Unregister.
+UDP signalling has no TLS or SRTP: SIP and media are unencrypted, so use it on a trusted LAN only. TLS mode registers over SIP TLS with the server certificate verified (the host must be the certificate's DNS name), and requires SRTP (SDES) for media, so calls fail rather than fall back to plain RTP. `https` needs no App Transport Security exception, and `http` to a LAN IP is exempt from it. The password is stored in the Keychain (readable after first unlock, so a push can register the app while locked); the rest in `UserDefaults`. Allow Local Network and Microphone access when prompted. Answering from the banner or lock screen is handled by iOS, which may bring the app to the foreground; the app does nothing to request that and keeps the call running either way. Whenever iOS opens the app on answer (or you open it mid-call), `ContentView` shows a full-screen call screen instead of the settings form: "Claude", "Ringing" with Answer and Decline while ringing in-app, "Connecting…" once answered in CallKit until the SIP call connects, then "On a call" with a live timer, a Speaker toggle and a red End button. Speaker routes through Linphone's output audio device (which applies the AVAudioSession speaker override under CallKit); its state follows `AVAudioSession.routeChangeNotification`, so headphones, Bluetooth and the system call UI keep it in step, and the call returns to the default route when it ends. The settings form returns when the call ends. Once registered, the app registers again on launch, in the foreground, and on each push until you tap Unregister.
 
 ## Debugging push and CallKit
 
@@ -57,6 +58,7 @@ log show x.logarchive --predicate 'subsystem == "dev.willsawyerrrr.phone-claude"
 - `Log.swift` — the `push` and `callkit` loggers.
 - `CallKitController.swift`, `VoIPPush.swift` — thin CallKit and PushKit wrappers; CallKit activates the audio session for Linphone.
 - `DeviceRegistration.swift` — builds the token registration request.
+- `TransportPolicy.swift` — in TLS mode, sets the core to dial out over TLS with certificate verification and mandatory SRTP.
 - `SIPConfig.swift`, `Keychain.swift` — connection settings and their persistence.
 - `ContentView.swift` — settings form and registration status; shows `CallView` while a call exists.
 - `SpeakerRoute.swift` — the speaker toggle's state machine, the `AudioRouting` protocol it drives, and the Linphone implementation.

@@ -20,6 +20,12 @@ struct ContentView: View {
         NavigationStack {
             Form {
                 Section("Server") {
+                    Picker(
+                        "Connection",
+                        selection: Binding(get: { config.transport }, set: { config.select($0) })
+                    ) {
+                        ForEach(SIPTransport.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
                     TextField("Host", text: $config.host)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
