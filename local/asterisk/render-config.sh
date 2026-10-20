@@ -42,11 +42,14 @@ fi
 export MEDIA_ENCRYPTION_LINE
 
 # Only these are substituted, so dialplan variables like `${CALL_ID}` survive.
+# shellcheck disable=SC2016 # envsubst needs the literal `${VAR}` names.
 vars='${HOST_LAN_IP} ${SIP_PORT} ${RTP_START} ${RTP_END} ${LOCAL_NET_LINES}
 ${SOFTPHONE_USERNAME} ${SOFTPHONE_PASSWORD} ${ARI_USERNAME} ${ARI_PASSWORD}
 ${TLS_DIR} ${TLS_PORT} ${MEDIA_ENCRYPTION_LINE}'
 
+render() { envsubst "$vars" <"$1" >"$2"; }
+
 for template in "$TEMPLATES_DIR"/*.conf; do
-  envsubst "$vars" <"$template" >"$CONFIG_DIR/$(basename "$template")"
+  render "$template" "$CONFIG_DIR/${template##*/}"
 done
-envsubst "$vars" <"$TEMPLATES_DIR/transports/$transports.conf" >"$CONFIG_DIR/pjsip_transports.conf"
+render "$TEMPLATES_DIR/transports/$transports.conf" "$CONFIG_DIR/pjsip_transports.conf"
