@@ -5,11 +5,21 @@ from typing import Literal
 CallStatus = Literal["pending", "answered", "failed"]
 
 
+@dataclass(frozen=True)
+class Segment:
+    """Text to speak, in the voice named `engine:voice` (the default if unset)."""
+
+    text: str
+    voice: str | None = None
+
+
 @dataclass
 class CallRecord:
     call_id: str
     question: str
     context: str | None = None
+    # Spoken in place of the question and context when set.
+    segments: tuple[Segment, ...] | None = None
     status: CallStatus = "pending"
     answer: str | None = None
     error: str | None = None
@@ -29,6 +39,11 @@ class CallRecord:
             return f"Context: {self.context} {self.question}"
         return self.question
 
+    @property
+    def script(self) -> tuple[Segment, ...]:
+        """What is spoken when the call connects."""
+        return self.segments or (Segment(self.prompt),)
+
 
 class CallStore:
     """In-memory call state, keyed by call ID.
@@ -42,13 +57,17 @@ class CallStore:
         self._calls: dict[str, CallRecord] = {}
 
     def register(
-        self, call_id: str, question: str, context: str | None
+        self,
+        call_id: str,
+        question: str,
+        context: str | None,
+        segments: tuple[Segment, ...] | None = None,
     ) -> CallRecord | None:
         """Registers a pending call, or returns `None` if the ID is taken."""
         self._prune()
         if call_id in self._calls:
             return None
-        record = CallRecord(call_id, question, context)
+        record = CallRecord(call_id, question, context, segments)
         self._calls[call_id] = record
         return record
 

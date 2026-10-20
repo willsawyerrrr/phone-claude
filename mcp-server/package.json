@@ -11,6 +11,7 @@
     "dev": "tsx src/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "audition": "tsx src/audition.ts",
     "test": "vitest run"
   },
   "dependencies": {

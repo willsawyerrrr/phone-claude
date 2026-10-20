@@ -6,6 +6,13 @@ BYTES_PER_SECOND = SAMPLE_RATE * 2
 FRAME_BYTES = 640  # 20 ms of 16 kHz, 16-bit mono
 
 
+DEFAULT_VOICES = {
+    "piper": "en_US-lessac-medium",
+    "kokoro": "af_heart",
+    "pocket": "alba-casual",
+}
+
+
 @dataclass(frozen=True)
 class Settings:
     audiosocket_port: int = 9092
@@ -22,7 +29,9 @@ class Settings:
     vad_threshold: float = 0.5
     models_dir: str = "/models"
     whisper_model: str = "whisper-base.en"
-    piper_voice: str = "en_US-lessac-medium"
+    # `piper`, `kokoro` or `pocket`; the voice defaults per engine.
+    tts_engine: str = "piper"
+    tts_voice: str = ""
     apns_key_id: str = ""
     apns_team_id: str = ""
     apns_key_file: str = "/run/secrets/apns_key"
@@ -31,6 +40,12 @@ class Settings:
     device_port: int = 8081
     # Bearer token the soft-phone presents to register its push token.
     device_secret: str = ""
+
+    @property
+    def tts_voice_name(self) -> str:
+        """The `engine:voice` name of the voice that speaks on calls."""
+        voice = self.tts_voice or DEFAULT_VOICES.get(self.tts_engine, "")
+        return f"{self.tts_engine}:{voice}"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -47,7 +62,8 @@ class Settings:
             vad_threshold=float(env("VAD_THRESHOLD", d.vad_threshold)),
             models_dir=env("MODELS_DIR", d.models_dir),
             whisper_model=env("WHISPER_MODEL", d.whisper_model),
-            piper_voice=env("PIPER_VOICE", d.piper_voice),
+            tts_engine=env("TTS_ENGINE", d.tts_engine),
+            tts_voice=env("TTS_VOICE", d.tts_voice),
             apns_key_id=env("APNS_KEY_ID", d.apns_key_id),
             apns_team_id=env("APNS_TEAM_ID", d.apns_team_id),
             apns_key_file=env("APNS_KEY_FILE", d.apns_key_file),

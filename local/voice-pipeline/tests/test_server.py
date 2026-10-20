@@ -11,6 +11,7 @@ from tests.conftest import (
     FakeStt,
     FakeTts,
     FakeVad,
+    FakeVoices,
     no_pace,
     quiet,
     talk,
@@ -22,6 +23,7 @@ from voice_pipeline.audiosocket import (
     encode_frame,
     read_frame,
 )
+from voice_pipeline.audition import PROMPTS
 from voice_pipeline.devices import Device, DeviceStore
 from voice_pipeline.push import NoDevice, NotConfigured, PushError
 from voice_pipeline.server import Pipeline
@@ -63,6 +65,7 @@ async def pipeline(settings, tmp_path, pusher):
         no_pace,
         DeviceStore(tmp_path / "device.json"),
         pusher,
+        FakeVoices("piper:a", "kokoro:af_heart"),
     )
 
 
@@ -357,3 +360,33 @@ async def test_device_app_exposes_only_device_registration(device_http):
     assert (await device_http.post("/push")).status == 404
     assert (await device_http.get("/healthz")).status == 404
     assert (await device_http.get("/device", headers=auth())).status == 405
+
+
+async def test_audition_offers_the_installed_candidates_and_the_prompts(http):
+    body = await (await http.get("/audition")).json()
+
+    assert body["default"] == "piper:en_US-lessac-medium"
+    assert body["candidates"] == ["kokoro:af_heart"]
+    assert set(body["prompts"]) == set(PROMPTS)
+
+
+async def test_registering_a_call_with_segments(http):
+    response = await register(
+        http, segments=[{"text": "One."}, {"text": "Two.", "voice": "kokoro:af_heart"}]
+    )
+
+    assert response.status == 201
+
+
+@pytest.mark.parametrize(
+    "segments",
+    [
+        [],
+        "text",
+        [{"voice": "piper:a"}],
+        [{"text": " "}],
+        [{"text": "x", "voice": "nope"}],
+    ],
+)
+async def test_rejects_invalid_segments(http, segments):
+    assert (await register(http, segments=segments)).status == 400

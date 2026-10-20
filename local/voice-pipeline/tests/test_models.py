@@ -1,7 +1,14 @@
 import numpy as np
+import pytest
 
-from voice_pipeline.config import FRAME_BYTES
-from voice_pipeline.models import VAD_CONTEXT, VAD_WINDOW, SileroVad
+from voice_pipeline.config import FRAME_BYTES, Settings
+from voice_pipeline.models import (
+    VAD_CONTEXT,
+    VAD_WINDOW,
+    SileroVad,
+    SpeakerBank,
+    UnknownVoice,
+)
 
 
 class FakeSession:
@@ -63,3 +70,42 @@ def test_reset_clears_the_verdict_and_state():
     vad.reset()
 
     assert not vad.is_speech(FRAME)
+
+
+def test_the_bank_lists_the_voices_whose_models_are_installed(tmp_path):
+    (tmp_path / "silero_vad.onnx").touch()
+    (tmp_path / "en_US-lessac-medium.onnx").touch()
+    (tmp_path / "pocket" / "voices").mkdir(parents=True)
+    (tmp_path / "pocket" / "voices" / "alba-casual.wav").touch()
+
+    available = SpeakerBank(tmp_path).available()
+
+    assert available == ["piper:en_US-lessac-medium", "pocket:alba-casual"]
+
+
+def test_the_bank_lists_every_kokoro_voice_once_its_model_is_installed(tmp_path):
+    (tmp_path / "kokoro").mkdir()
+    (tmp_path / "kokoro" / "model.onnx").touch()
+
+    available = SpeakerBank(tmp_path).available()
+
+    assert "kokoro:af_heart" in available
+    assert "kokoro:am_michael" in available
+
+
+def test_the_bank_refuses_a_voice_that_is_not_installed(tmp_path):
+    with pytest.raises(UnknownVoice):
+        SpeakerBank(tmp_path).get("piper:missing")
+
+
+@pytest.mark.parametrize(
+    ("engine", "voice", "name"),
+    [
+        ("piper", "", "piper:en_US-lessac-medium"),
+        ("kokoro", "", "kokoro:af_heart"),
+        ("pocket", "", "pocket:alba-casual"),
+        ("kokoro", "am_michael", "kokoro:am_michael"),
+    ],
+)
+def test_the_default_voice_follows_the_engine(engine, voice, name):
+    assert Settings(tts_engine=engine, tts_voice=voice).tts_voice_name == name

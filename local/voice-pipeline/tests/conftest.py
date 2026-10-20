@@ -46,6 +46,27 @@ class FakeTts:
         return b"\x02" * FRAME_BYTES * self._frames
 
 
+class FakeVoices:
+    """A speaker bank whose voices each record what they were asked to say."""
+
+    def __init__(self, *names: str) -> None:
+        self.names = list(names)
+        self.spoken: list[tuple[str, str]] = []
+
+    def available(self) -> list[str]:
+        return self.names
+
+    def get(self, name: str) -> FakeTts:
+        voices = self
+
+        class Voice(FakeTts):
+            def synthesize(self, text: str) -> bytes:
+                voices.spoken.append((name, text))
+                return super().synthesize(text)
+
+        return Voice()
+
+
 class FakeChannel:
     """A scripted call: each turn of caller audio is released once the
     pipeline finishes an utterance, i.e. sends silence after speech."""

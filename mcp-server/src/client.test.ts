@@ -120,6 +120,18 @@ describe("client", () => {
   });
 
   describe("startCall", () => {
+    it("registers segments with the pipeline when given", async () => {
+      const segments = [{ text: "One.", voice: "kokoro:af_heart" }];
+
+      await startCall(config, callId, "Audition", undefined, segments);
+
+      expect(JSON.parse(pipeline.requests[0]!.body)).toEqual({
+        callId,
+        question: "Audition",
+        segments,
+      });
+    });
+
     it("registers the prompt with the pipeline, then originates via ARI", async () => {
       await startCall(config, callId, "Deploy?", "Staging is green");
 

@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: shellcheck local/up.sh local/test-up.sh
+      - run: shellcheck local/up.sh local/test-up.sh local/audition.sh
       - run: local/test-up.sh
 
   ios:

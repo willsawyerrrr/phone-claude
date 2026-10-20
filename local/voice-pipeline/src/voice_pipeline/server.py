@@ -7,12 +7,14 @@ from collections.abc import Callable
 from aiohttp import web
 
 from voice_pipeline.audiosocket import KIND_UUID, StreamChannel, read_frame
+from voice_pipeline.audition import CANDIDATES, PROMPTS
 from voice_pipeline.config import Settings
 from voice_pipeline.devices import DeviceStore, parse_device
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
+from voice_pipeline.models import SpeakerBank
 from voice_pipeline.push import ApnsPusher, NoDevice, NotConfigured, PushError
 from voice_pipeline.session import CallSession, Pace
-from voice_pipeline.store import CallStore
+from voice_pipeline.store import CallStore, Segment
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ class Pipeline:
         pace: Pace = asyncio.sleep,
         devices: DeviceStore | None = None,
         pusher: ApnsPusher | None = None,
+        voices: SpeakerBank | None = None,
     ) -> None:
         self.settings = settings
         self.devices = devices or DeviceStore(settings.device_file)
@@ -46,6 +49,7 @@ class Pipeline:
         self._vad_factory = vad_factory
         self._stt = stt
         self._tts = tts
+        self._voices = voices
         self._pace = pace
         self._sessions: dict[str, asyncio.Task] = {}
 
@@ -96,6 +100,7 @@ class Pipeline:
             self.store,
             self.settings,
             self._pace,
+            self._voices.get if self._voices else None,
         )
         self._sessions[record.call_id] = task = asyncio.current_task()
         try:
@@ -116,6 +121,7 @@ class Pipeline:
             [
                 web.get("/healthz", self._healthz),
                 web.post("/calls", self._register),
+                web.get("/audition", self._audition),
                 web.get("/calls/{call_id}", self._status),
                 web.post("/calls/{call_id}/cancel", self._cancel),
                 web.post("/push", self._push),
@@ -186,18 +192,47 @@ class Pipeline:
                 raise ValueError("question")
             if context is not None and not isinstance(context, str):
                 raise ValueError("context")
+            segments = self._parse_segments(body.get("segments"))
         except ValueError, KeyError, TypeError, AttributeError:
             return web.json_response(
                 {
                     "error": "Body must be {callId: uuid, question: string, "
-                    "context?: string}"
+                    "context?: string, segments?: [{text: string, "
+                    "voice?: an installed engine:voice}]}"
                 },
                 status=400,
             )
-        record = self.store.register(call_id, question, context or None)
+        record = self.store.register(call_id, question, context or None, segments)
         if record is None:
             return web.json_response({"error": "callId already exists"}, status=409)
         return web.json_response(record.to_json(), status=201)
+
+    def _parse_segments(self, raw: object) -> tuple[Segment, ...] | None:
+        if raw is None:
+            return None
+        if not isinstance(raw, list) or not raw:
+            raise ValueError("segments")
+        available = self._voices.available() if self._voices else []
+        segments = []
+        for item in raw:
+            text, voice = item["text"], item.get("voice")
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("text")
+            if voice is not None and voice not in available:
+                raise ValueError("voice")
+            segments.append(Segment(text, voice))
+        return tuple(segments)
+
+    async def _audition(self, _request: web.Request) -> web.Response:
+        """The voices and prompts for comparing voices over a call."""
+        installed = self._voices.available() if self._voices else []
+        return web.json_response(
+            {
+                "default": self.settings.tts_voice_name,
+                "candidates": [name for name in CANDIDATES if name in installed],
+                "prompts": PROMPTS,
+            }
+        )
 
     async def _status(self, request: web.Request) -> web.Response:
         record = self.store.get(_normalise(request.match_info["call_id"]))
