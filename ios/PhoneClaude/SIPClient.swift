@@ -2,7 +2,7 @@ import Observation
 import UIKit
 import linphonesw
 
-/// Registers with Asterisk over UDP and answers incoming calls, using the Linphone SDK for SIP and media.
+/// Registers with Asterisk over UDP or TLS and answers incoming calls, using the Linphone SDK for SIP and media.
 ///
 /// Linphone leaves the audio session to CallKit: `activateAudioSession(_:)` must follow CallKit's
 /// activation. The screen is kept awake while registered.
@@ -58,6 +58,7 @@ final class SIPClient {
             newCore.ipv6Enabled = false
             newCore.callkitEnabled = true
             CodecPolicy.apply(to: newCore)
+            try TransportPolicy.apply(config.transport, to: newCore)
 
             let newDelegate = CoreDelegateStub(
                 onCallStateChanged: { [weak self] _, call, state, _ in

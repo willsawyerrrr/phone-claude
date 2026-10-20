@@ -44,8 +44,11 @@ as the `SOFTPHONE_USERNAME` endpoint and answers calls, using the Linphone SDK
 for SIP and media. It rings from the lock screen: the app un-registers and stops its SIP client in
 the background, so Asterisk sees the endpoint offline, and a PushKit VoIP
 push wakes it; every push is reported to CallKit at once, then the app
-re-registers over the LAN and answers the INVITE when the user accepts. It
-sends its PushKit token to the pipeline's device endpoint. See `ios/README.md`.
+re-registers and answers the INVITE when the user accepts. The user picks the
+connection: plain UDP on the LAN (port 5060, device endpoint `http://<ip>:8081/device`),
+or SIP TLS on 5061 with mandatory SDES SRTP and `https://<host>/device`
+for the cloud-hosted stack. It sends its PushKit token to the pipeline's
+device endpoint. See `ios/README.md`.
 
 ## Build and test
 

@@ -18,6 +18,14 @@ final class DeviceRegistrationTests: XCTestCase {
         XCTAssertEqual(body, ["token": "abcd", "environment": "sandbox"])
     }
 
+    func testRequestOverTLSUsesHTTPS() throws {
+        var config = SIPConfig(host: "phone.example.com", password: "secret")
+        config.select(.tls)
+        let request = try XCTUnwrap(
+            DeviceRegistration.request(for: config, token: "abcd", environment: .production))
+        XCTAssertEqual(request.url?.absoluteString, "https://phone.example.com/device")
+    }
+
     func testRequestNeedsHostAndValidPort() {
         var config = SIPConfig()
         XCTAssertNil(DeviceRegistration.request(for: config, token: "ab", environment: .production))
