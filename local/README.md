@@ -13,7 +13,7 @@ The AudioSocket connection is made only once the phone answers.
 
 ```sh
 cp .env.example .env   # set SOFTPHONE_PASSWORD, ARI_PASSWORD
-./up.sh                # the first build downloads the speech models (~1.2 GB image)
+./up.sh                # the first build downloads the speech models (~2.8 GB image)
 docker compose ps      # asterisk and voice-pipeline should report "healthy"
 ```
 
@@ -59,6 +59,18 @@ The Mac's Bonjour name (`scutil --get LocalHostName`, resolved as `<LocalHostNam
 - **Registration.** The app un-registers (`Expires: 0`) before it stops in the background, so the endpoint goes offline at once. The endpoint's AOR expires registrations in 120 s by default (30–300 s) and qualifies every 5 s with a 2 s timeout, so a contact that vanishes without un-registering (a crash, a lost network) goes unavailable within about 7 s and the next `ask_by_phone` pushes instead of dialling a dead contact. The qualify `OPTIONS` is one small packet per 5 s to a single contact, which a live phone answers well within 2 s.
 
 Set `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_KEY_PATH` (host path to the `.p8` key, see [`../ios/README.md`](../ios/README.md#apple-setup)). The key is mounted read-only into the container as the `pipeline` user, so it must be readable by others (`chmod 644`). Never commit it.
+
+## Auditioning voices
+
+The image carries several text-to-speech voices (see [`voice-pipeline/README.md`](voice-pipeline/README.md#voices)); `TTS_ENGINE` and `TTS_VOICE` in `.env` choose the one that speaks on calls.
+
+```sh
+./audition.sh render                  # WAVs in ./audition/, and each voice's real-time factor
+./audition.sh call                    # rings the phone; plays every candidate blind, then prints the mapping
+./audition.sh call --prompts all --voices kokoro:af_heart,kokoro:am_michael,pocket:alba-casual
+```
+
+`call` needs the stack up and `pnpm install` run at the repo root. Say "repeat" to hear it all again; any other reply ends the call and is printed with the mapping from "Voice one", "Voice two", … to voices.
 
 ## Placing a test call
 

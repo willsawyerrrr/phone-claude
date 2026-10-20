@@ -28,7 +28,8 @@ works in 16 kHz slin. The
 phone's push token (`PUT /device` on the LAN port `DEVICE_PORT`, bearer
 `SOFTPHONE_PASSWORD`, persisted in the `pipeline-data` volume) and sends the
 APNs VoIP push (`POST /push`, loopback). It speaks the question
-with local TTS, listens with local VAD + STT, and exposes the `/calls` HTTP
+with local TTS (Piper by default; Kokoro and Kyutai Pocket TTS are selectable with
+`TTS_ENGINE`, and `local/audition.sh` compares them), listens with local VAD + STT, and exposes the `/calls` HTTP
 API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. See `local/README.md` and
 `local/voice-pipeline/README.md`.
@@ -53,7 +54,7 @@ sends its PushKit token to the pipeline's device endpoint. See `ios/README.md`.
   minor bumps of the base image):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.
-- Stack start script: `shellcheck local/up.sh local/test-up.sh && local/test-up.sh`.
+- Stack start script: `shellcheck local/up.sh local/test-up.sh local/audition.sh && local/test-up.sh`.
 - iOS (CI and the TestFlight deploy both pin `macos-26` and Xcode 26.6, the
   newest GA Xcode on GitHub's runners): in `ios/`, `xcodegen generate`, then
   `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude

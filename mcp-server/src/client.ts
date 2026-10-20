@@ -10,6 +10,12 @@ interface CallStatusResponse {
   error?: string;
 }
 
+/** Text for the pipeline to speak, in the named `engine:voice` if given. */
+export interface Segment {
+  text: string;
+  voice?: string;
+}
+
 /**
  * Places a call: registers the prompt with the voice pipeline, wakes the
  * soft-phone with a VoIP push if its endpoint isn't online (the app
@@ -18,7 +24,8 @@ interface CallStatusResponse {
  * the call ID (a UUID, because Asterisk's AudioSocket keys the audio stream
  * by one) so it can track and cancel the call from before the first request.
  * It also names the ARI channel, so the call can be hung up without tracking
- * a separate channel ID. The prompt is registered first so it's in place by
+ * a separate channel ID. When `segments` is given the pipeline speaks them in
+ * place of the question and context. The prompt is registered first so it's in place by
  * the time the phone answers and AudioSocket connects. Any failure hangs up
  * whatever was started before it is thrown.
  */
@@ -27,12 +34,13 @@ export async function startCall(
   callId: string,
   question: string,
   context?: string,
+  segments?: Segment[],
 ): Promise<void> {
   try {
     const register = await fetch(`${config.pipelineUrl}/calls`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ callId, question, context }),
+      body: JSON.stringify({ callId, question, context, segments }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!register.ok) {

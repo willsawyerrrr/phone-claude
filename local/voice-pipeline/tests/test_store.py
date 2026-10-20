@@ -1,4 +1,4 @@
-from voice_pipeline.store import CallStore
+from voice_pipeline.store import CallStore, Segment
 
 
 def test_registers_a_pending_call():
@@ -74,3 +74,12 @@ def test_fail_pending_leaves_finished_calls_alone():
 
     assert store.get("a").error == "Shut down"
     assert store.get("b").status == "answered"
+
+
+def test_a_call_speaks_its_prompt_unless_it_has_segments():
+    store = CallStore(ttl_s=60)
+    plain = store.register("a", "Ship it?", "Tests pass.")
+    scripted = store.register("b", "q", None, (Segment("One", "kokoro:af_heart"),))
+
+    assert plain.script == (Segment("Context: Tests pass. Ship it?"),)
+    assert scripted.script == (Segment("One", "kokoro:af_heart"),)

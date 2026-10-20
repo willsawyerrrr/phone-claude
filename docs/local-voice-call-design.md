@@ -124,14 +124,15 @@ rejected: the pipeline hangs up the connection.
 
 ### Pipeline HTTP API (`:8080`)
 
-| Request                  | Body / response                                                   |
-| ------------------------ | ----------------------------------------------------------------- |
-| `POST /calls`            | `{callId, question, context?}` registers a prompt; `201`.         |
-| `GET /calls/:id`         | `{status: "pending" \| "answered" \| "failed", answer?, error?}`. |
-| `POST /calls/:id/cancel` | Ends the call if in flight and marks it `failed`; idempotent.     |
-| `GET /healthz`           | `{ok: true}`.                                                     |
-| `POST /push`             | Sends the VoIP push; `204`, `404` no device, `503`, `502`.        |
-| `PUT /device` (`:8081`)  | `{token, environment}`, bearer auth; stores the push token.       |
+| Request                  | Body / response                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /calls`            | `{callId, question, context?, segments?}` registers a prompt; `201`. `segments` (`[{text, voice?}]`) replaces the spoken question and context, each in its own voice. |
+| `GET /audition`          | The default voice, audition candidates and prompts.                                                                                                                   |
+| `GET /calls/:id`         | `{status: "pending" \| "answered" \| "failed", answer?, error?}`.                                                                                                     |
+| `POST /calls/:id/cancel` | Ends the call if in flight and marks it `failed`; idempotent.                                                                                                         |
+| `GET /healthz`           | `{ok: true}`.                                                                                                                                                         |
+| `POST /push`             | Sends the VoIP push; `204`, `404` no device, `503`, `502`.                                                                                                            |
+| `PUT /device` (`:8081`)  | `{token, environment}`, bearer auth; stores the push token.                                                                                                           |
 
 Call state is held in memory for the life of the process; a call is dropped
 after a TTL.
@@ -187,7 +188,9 @@ home network, so the phone must be on it.
   just-completed answer does not overwrite it.
 
 STT and TTS run on CPU inside the 4 GB Docker VM, on arm64 and amd64. Model
-choice is documented in `local/voice-pipeline/README.md`. There is
+choice, the selectable TTS voices (`TTS_ENGINE`, `TTS_VOICE`) and how to
+audition them (`local/audition.sh`) are documented in
+`local/voice-pipeline/README.md`. There is
 no LLM stage: a call is one question and one reply.
 
 ## `mcp-server`
@@ -201,7 +204,7 @@ in `startCall` or `pollForAnswer` cancels the call before it is thrown.
 in-flight calls, so concurrent calls and an interrupt during `startCall` are
 all hung up on shutdown.
 
-- `startCall` — `POST /calls` to the pipeline, wake an offline phone (`POST /push`, then poll the ARI endpoint state for up to `PUSH_WAIT_MS`), then originate via ARI with `timeout=RING_TIMEOUT_S`.
+- `startCall` — `POST /calls` to the pipeline (with the optional `segments` that `src/audition.ts` uses to play voices in sequence), wake an offline phone (`POST /push`, then poll the ARI endpoint state for up to `PUSH_WAIT_MS`), then originate via ARI with `timeout=RING_TIMEOUT_S`.
 - `pollForAnswer` — `GET /calls/:id` on the pipeline, plus
   `GET /ari/channels/<call ID>` while `pending`; a 404 there (confirmed by a
   second status read) fails the call.

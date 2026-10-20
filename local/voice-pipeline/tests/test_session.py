@@ -9,13 +9,14 @@ from tests.conftest import (
     FakeStt,
     FakeTts,
     FakeVad,
+    FakeVoices,
     eventually,
     no_pace,
     quiet,
     talk,
 )
 from voice_pipeline.session import REPEAT_PATTERN, CallSession
-from voice_pipeline.store import CallStore
+from voice_pipeline.store import CallStore, Segment
 
 CALL_ID = "8d1f4c2e-7a3b-4c55-9f0e-2b6a1d3c4e5f"
 
@@ -445,3 +446,42 @@ async def test_an_answer_containing_again_is_recorded(settings):
 
     assert store.get(CALL_ID).answer == "yes, run it again"
     assert tts.spoken == ["Ship it?", "Got it, thanks. Goodbye."]
+
+
+async def test_segments_are_spoken_in_their_own_voices(settings):
+    voices = FakeVoices("kokoro:af_heart", "piper:en_US-lessac-high")
+    store = CallStore(ttl_s=60)
+    record = store.register(
+        CALL_ID,
+        "Audition",
+        None,
+        (
+            Segment("Voice one."),
+            Segment("Ship it?", "kokoro:af_heart"),
+            Segment("Ship it?", "piper:en_US-lessac-high"),
+        ),
+    )
+    tts = FakeTts()
+    # The channel releases a turn at each gap between segments; the pipeline
+    # discards what arrives while it is speaking.
+    channel = FakeChannel(*[talk(0.2) + quiet(1.0)] * 6)
+    session = CallSession(
+        record, channel, FakeVad(), FakeStt("again", "ok"), tts, store, settings,
+        no_pace, voices.get,
+    )  # fmt: skip
+
+    await session.run()
+
+    assert tts.spoken == [
+        "Voice one.",
+        "One more time. Voice one.",
+        "Got it, thanks. Goodbye.",
+    ]
+    assert (
+        voices.spoken
+        == [
+            ("kokoro:af_heart", "Ship it?"),
+            ("piper:en_US-lessac-high", "Ship it?"),
+        ]
+        * 2
+    )

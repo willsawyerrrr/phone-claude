@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from voice_pipeline.config import FRAME_BYTES, Settings
-from voice_pipeline.models import PiperSpeaker, SileroVad, WhisperTranscriber
+from voice_pipeline.models import SileroVad, SpeakerBank, WhisperTranscriber
 
 MODELS = Path(Settings.from_env().models_dir)
 SETTINGS = Settings.from_env()
@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def spoken() -> bytes:
-    speaker = PiperSpeaker(MODELS / f"{SETTINGS.piper_voice}.onnx")
+    speaker = SpeakerBank(MODELS).get(SETTINGS.tts_voice_name)
     return speaker.synthesize("Yes, go ahead and ship it.")
 
 

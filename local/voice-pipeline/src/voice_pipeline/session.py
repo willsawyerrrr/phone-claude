@@ -8,7 +8,7 @@ from enum import Enum
 from voice_pipeline.audiosocket import KIND_AUDIO, KIND_ERROR, KIND_HANGUP, Channel
 from voice_pipeline.config import BYTES_PER_SECOND, FRAME_BYTES, Settings
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
-from voice_pipeline.store import CallRecord, CallStore
+from voice_pipeline.store import CallRecord, CallStore, Segment
 
 log = logging.getLogger(__name__)
 
@@ -84,12 +84,14 @@ class CallSession:
         store: CallStore,
         settings: Settings,
         pace: Pace | None = None,
+        voices: Callable[[str], Speaker] | None = None,
     ) -> None:
         self._record = record
         self._channel = channel
         self._vad = vad
         self._stt = stt
         self._tts = tts
+        self._voices = voices
         self._store = store
         self._settings = settings
         self._pace = pace or _RealtimePacer()
@@ -133,10 +135,10 @@ class CallSession:
 
     async def _converse(self) -> None:
         call_id = self._record.call_id
-        prompt = self._record.prompt
+        script = self._record.script
         repeats = 0
         while True:
-            await self._speak(prompt)
+            await self._speak(script)
             outcome = await self._listen()
 
             if outcome is _NoInput.HUNG_UP:
@@ -144,16 +146,17 @@ class CallSession:
                 return
             if outcome is _NoInput.TIMED_OUT:
                 if self._store.fail(call_id, NO_INPUT_ERROR):
-                    await self._speak(NO_INPUT_GOODBYE)
+                    await self._speak((Segment(NO_INPUT_GOODBYE),))
                 return
 
             log.info("call %s heard %r", call_id, outcome)
             if REPEAT_PATTERN.search(outcome) and repeats < self._settings.max_repeats:
                 repeats += 1
-                prompt = f"One more time. {self._record.prompt}"
+                first, *rest = self._record.script
+                script = (Segment(f"One more time. {first.text}", first.voice), *rest)
                 continue
             if self._store.answer(call_id, outcome):
-                await self._speak(GOODBYE)
+                await self._speak((Segment(GOODBYE),))
             return
 
     async def _pump(self) -> None:
@@ -168,13 +171,19 @@ class CallSession:
             if frame.kind == KIND_AUDIO:
                 self._inbox.put_nowait(frame.payload)
 
-    async def _speak(self, text: str) -> None:
-        pcm = await asyncio.to_thread(self._tts.synthesize, text)
-        if self._hung_up.is_set():
-            return
-        self._outbound_flushed.clear()
-        self._outbound.extend(pcm)
-        await self._outbound_flushed.wait()
+    async def _speak(self, script: tuple[Segment, ...]) -> None:
+        for segment in script:
+            pcm = await asyncio.to_thread(self._synthesize, segment)
+            if self._hung_up.is_set():
+                return
+            self._outbound_flushed.clear()
+            self._outbound.extend(pcm)
+            await self._outbound_flushed.wait()
+
+    def _synthesize(self, segment: Segment) -> bytes:
+        if segment.voice is None or self._voices is None:
+            return self._tts.synthesize(segment.text)
+        return self._voices(segment.voice).synthesize(segment.text)
 
     async def _stream_outbound(self) -> None:
         """Sends one frame per tick: queued speech, else silence."""

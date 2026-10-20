@@ -18,3 +18,4 @@ DerivedData/
 ios/PhoneClaude/PhoneClaude.entitlements
 ios/PhoneClaude/Info.plist
 ios/build/
+local/audition/

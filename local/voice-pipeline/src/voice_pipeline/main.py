@@ -6,18 +6,20 @@ from pathlib import Path
 from aiohttp import web
 
 from voice_pipeline.config import Settings
-from voice_pipeline.models import PiperSpeaker, SileroVad, WhisperTranscriber
+from voice_pipeline.models import SileroVad, SpeakerBank, WhisperTranscriber
 from voice_pipeline.server import Pipeline
 
 
 async def serve(settings: Settings) -> None:
     models = Path(settings.models_dir)
     vad_path = models / "silero_vad.onnx"
+    voices = SpeakerBank(models)
     pipeline = Pipeline(
         settings,
         lambda: SileroVad.load(vad_path, settings.vad_threshold),
         WhisperTranscriber(models / settings.whisper_model),
-        PiperSpeaker(models / f"{settings.piper_voice}.onnx"),
+        voices.get(settings.tts_voice_name),
+        voices=voices,
     )
 
     stop = asyncio.Event()
