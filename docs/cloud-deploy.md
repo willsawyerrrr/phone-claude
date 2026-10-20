@@ -1,11 +1,12 @@
 # Cloud deploy
 
-Runs the `local/` stack on one Hetzner Cloud VM for one phone. SIP, RTP and the HTTPS device endpoint are public; ARI (`8088`) and the pipeline API (`8080`) are reachable only over Tailscale, from the Mac running `mcp-server`.
+Runs the `local/` stack on one cloud VM for one phone, using DigitalOcean in Sydney (`syd1`) as the example. SIP (TLS), RTP and the HTTPS device endpoint are public; ARI (`8088`) and the pipeline API (`8080`) are reachable only over Tailscale, from the Mac running `mcp-server`.
 
 ## VM
 
-- Hetzner CAX11 (arm64) or CPX21 (x86), Ubuntu LTS, with a public IPv4.
-- CAX11 needs arm64-capable Asterisk and Python images and `onnxruntime`/`faster-whisper` wheels; build the stack once to confirm, else use CPX21.
+- x86 Ubuntu LTS droplet in `syd1`, 4 GB RAM minimum (Whisper `base.en`, Piper and Asterisk), e.g. `s-2vcpu-4gb`.
+- Assign a reserved IP to the droplet; it is the stable public address (`HOST_LAN_IP`).
+- Point an `A` record for `phone-claude.willsawyerrrr.dev` at the reserved IP.
 - Install Docker Engine and the Compose plugin ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/ubuntu/)).
 
 ## Tailscale
@@ -19,14 +20,14 @@ tailscale ip -4   # the VM's tailnet IP
 ```
 
 - Create the auth key in the Tailscale admin console with tag `tag:phone-claude-vps` (add the tag to `tagOwners`).
-- Tag the Mac `tag:phone-claude-mac`. ACL granting only the Mac access to the two ports:
+- The tailnet is `tailbc0238.ts.net`. ACL granting only the Mac user access to the two ports:
 
 ```json
 {
   "acls": [
     {
       "action": "accept",
-      "src": ["tag:phone-claude-mac"],
+      "src": ["will@willsawyerrrr.dev"],
       "dst": ["tag:phone-claude-vps:8080,8088"]
     }
   ],
@@ -43,11 +44,12 @@ tailscale ip -4   # the VM's tailnet IP
 
 ## Firewall
 
-Hetzner Cloud Firewall, inbound only:
+DigitalOcean Cloud Firewall attached to the droplet, inbound only:
 
 | Protocol | Port        | Purpose                     |
 | -------- | ----------- | --------------------------- |
 | UDP, TCP | 5060        | SIP (`SIP_PORT`)            |
+| TCP      | 5061        | SIP over TLS                |
 | UDP      | 10000-10100 | RTP (`RTP_START`-`RTP_END`) |
 | TCP      | 443         | Device endpoint over HTTPS  |
 
@@ -75,17 +77,17 @@ LOCAL_NET=127.0.0.0/8
 # APNS_* as in local/README.md; copy the .p8 key to the VM and set APNS_KEY_PATH
 ```
 
-Start it with the VM's public IP as `HOST_LAN_IP`:
+Start it with the reserved IP as `HOST_LAN_IP`:
 
 ```sh
-HOST_LAN_IP=<public IP> ./up.sh
+HOST_LAN_IP=<reserved IP> ./up.sh
 ```
 
 The override skips `up.sh`'s macOS `route`/`ipconfig` detection, so it works on Linux. Re-run it with the same value to apply `.env` changes. Start Tailscale first so the tailnet IP exists to bind to.
 
 `LOCAL_NET` stays loopback only. On a public host every peer is non-local, so Asterisk gives the phone `HOST_LAN_IP` in SIP and SDP; listing a private range would hand it a container address.
 
-Point a DNS record for `PUBLIC_HOSTNAME` at the VM's public IP before starting; `caddy` obtains its Let's Encrypt certificate on first start (see [`local/README.md`](../local/README.md#public-https-cloud-host)). The phone's SIP account uses the public IP as server (`SIP_PORT`) and the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
+Create the `PUBLIC_HOSTNAME` `A` record before starting; `caddy` obtains its Let's Encrypt certificate on first start (see [`local/README.md`](../local/README.md#public-https-cloud-host)). In the phone app, use TLS mode with host `phone-claude.willsawyerrrr.dev` and SIP port `5061`; the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
 
 ## Mac
 
