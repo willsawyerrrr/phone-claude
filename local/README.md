@@ -5,7 +5,7 @@ A Docker Compose stack that rings a SIP soft-phone on the local network, with no
 Services:
 
 - **`asterisk`** — the PBX. One PJSIP endpoint (the soft-phone, offering G.722 first, then `ulaw,alaw`), ARI on port 8088, and an `ask-by-phone` dialplan context. An ARI-originated call rings the soft-phone; once answered, extension `700` streams the call's audio over AudioSocket (16 kHz `slin16`) to `voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. `CALL_ID` must be a UUID, and is the connection's ID verbatim.
-- **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, loopback only) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
+- **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, on `PIPELINE_BIND_ADDRESS`, loopback by default) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
 
 The AudioSocket connection is made only once the phone answers.
 
@@ -17,13 +17,13 @@ cp .env.example .env   # set SOFTPHONE_PASSWORD, ARI_PASSWORD
 docker compose ps      # asterisk and voice-pipeline should report "healthy"
 ```
 
-`up.sh` detects this machine's current LAN IPv4 (the default-route interface, else `en0`/`en1`; never a tunnel, VPN or Docker interface), prints it, exports it as `HOST_LAN_IP`, and runs `docker compose up -d --build "$@"`. Re-run it after the IP changes: Compose recreates the containers whose configuration changed. `./up.sh --print` only prints the IP. `HOST_LAN_IP=<ip> ./up.sh` overrides detection; it fails if no IP is found.
+`up.sh` detects this machine's current LAN IPv4 (the default-route interface, else `en0`/`en1`; never a tunnel, VPN or Docker interface), prints it, exports it as `HOST_LAN_IP`, and runs `docker compose up -d --build "$@"`. Re-run it after the IP changes: Compose recreates the containers whose configuration changed. `./up.sh --print` only prints the IP. `HOST_LAN_IP=<ip> ./up.sh` overrides detection (skipping the macOS-only `route`/`ipconfig` calls, so it works on Linux); without it, `up.sh` fails if no IP is found.
 
 `HOST_LAN_IP` is this machine's LAN address as the phone reaches it. Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this machine, and the device-registration port (`DEVICE_PORT`) is published on it. An exported `HOST_LAN_IP` takes precedence over `.env`, so leave it out of `.env`; a bare `docker compose` command reads only `.env` and fails without it.
 
 `./test-up.sh` tests the detection against stubbed `route` and `ipconfig`.
 
-Published ports: SIP `SIP_PORT` (UDP and TCP), RTP `RTP_START`–`RTP_END` (UDP, 1:1), and ARI `ARI_PORT` on `ARI_BIND_ADDRESS` (loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on.
+Published ports: SIP `SIP_PORT` (UDP and TCP), RTP `RTP_START`–`RTP_END` (UDP, 1:1), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, and the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS` (both loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on. To run the stack on a cloud VM instead, see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
 
 `LOCAL_NET` lists the networks Asterisk treats as local (loopback by default). Docker presents LAN peers from a gateway address in a private Docker range (`192.168.65.1` or a `172.x` address on Docker Desktop for macOS), so no private range may be listed, or the phone is given the container's internal address in SIP. The soft-phone endpoint's `media_address` is `HOST_LAN_IP`, so SDP always advertises the host for RTP.
 

@@ -31,8 +31,12 @@ APNs VoIP push (`POST /push`, loopback). It speaks the question
 with local TTS (Piper by default; Kokoro and Kyutai Pocket TTS are selectable with
 `TTS_ENGINE`, and `local/audition.sh` compares them), listens with local VAD + STT, and exposes the `/calls` HTTP
 API; it streams a frame to Asterisk every 20 ms for the whole call because
-Asterisk drops a quiet AudioSocket connection. See `local/README.md` and
-`local/voice-pipeline/README.md`.
+Asterisk drops a quiet AudioSocket connection. `ARI_BIND_ADDRESS` and
+`PIPELINE_BIND_ADDRESS` (both loopback by default) set the addresses of the
+ARI and pipeline API ports. The same stack runs on a single cloud VM
+(`docs/cloud-deploy.md`): `HOST_LAN_IP` is the VM's public IP, those two ports
+bind to its Tailscale IP, and `mcp-server` on the Mac reaches them over the
+tailnet. See `local/README.md` and `local/voice-pipeline/README.md`.
 
 `ios/` is a SwiftUI soft-phone (not a pnpm package; the Xcode project is
 generated from `ios/project.yml` with XcodeGen) that registers to `asterisk`
