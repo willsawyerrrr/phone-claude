@@ -18,7 +18,7 @@ Speaks a question over an Asterisk AudioSocket call and captures the spoken repl
 | `POST /push`             | Sends the VoIP push to the registered phone. `204`; `404` if no device; `503` if APNs is not configured; `502` if APNs rejects it.                                                                                                                           |
 | `GET /device`            | `{registered, environment?}`; never the token.                                                                                                                                                                                                               |
 
-**Device HTTP** (`:8081`, `DEVICE_PORT`, published on `HOST_LAN_IP`): `PUT /device` with `{token, environment: "sandbox" \| "production"}` and `Authorization: Bearer <DEVICE_SECRET>` (the soft-phone password) stores the phone's PushKit token in `DEVICE_FILE` (`/data/device.json`, the `pipeline-data` volume). `204`; `400` if invalid; `401` if unauthorised.
+**Device HTTP** (`:8081`, `DEVICE_PORT`, published on `DEVICE_BIND_ADDRESS`, default `HOST_LAN_IP`; over the internet it is reached through the `caddy` service, which serves it as `https://PUBLIC_HOSTNAME/device`): `PUT /device` with `{token, environment: "sandbox" \| "production"}` and `Authorization: Bearer <DEVICE_SECRET>` (the soft-phone password) stores the phone's PushKit token in `DEVICE_FILE` (`/data/device.json`, the `pipeline-data` volume). `204`; `400` if invalid; `401` if unauthorised.
 
 Call state is held in memory and dropped after `CALL_TTL_S` (1 hour); an expired call is `404`. The first terminal status is kept: a cancel that races a just-captured answer doesn't overwrite it.
 

@@ -1,0 +1,13 @@
+# Terminates TLS for PUBLIC_HOSTNAME with an automatic Let's Encrypt
+# certificate and exposes only the device-registration endpoint.
+# Certificates are stored in the `caddy-data` volume (`/data`), under
+# `caddy/certificates/acme-v02.api.letsencrypt.org-directory/<host>/<host>.{crt,key}`.
+{$PUBLIC_HOSTNAME} {
+	@device {
+		path /device
+		method PUT
+	}
+	reverse_proxy @device voice-pipeline:8081
+
+	respond 404
+}

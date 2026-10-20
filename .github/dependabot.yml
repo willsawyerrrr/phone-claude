@@ -28,6 +28,7 @@ updates:
   - package-ecosystem: docker
     directories:
       - /local/asterisk
+      - /local/caddy
       - /local/voice-pipeline
     schedule:
       interval: weekly
