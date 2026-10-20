@@ -5,6 +5,7 @@ A Docker Compose stack that rings a SIP soft-phone on the local network, with no
 Services:
 
 - **`asterisk`** — the PBX. One PJSIP endpoint (the soft-phone, offering G.722 first, then `ulaw,alaw`), ARI on port 8088, and an `ask-by-phone` dialplan context. An ARI-originated call rings the soft-phone; once answered, extension `700` streams the call's audio over AudioSocket (16 kHz `slin16`) to `voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. `CALL_ID` must be a UUID, and is the connection's ID verbatim.
+- **`asterisk` with `PUBLIC_HOSTNAME` set** — SIP is TLS-only on `TLS_PORT` (5061) and calls require SDES SRTP, so the SIP password and audio are encrypted; the plain UDP/TCP transports are off. See [Encrypted calls](#encrypted-calls).
 - **`caddy`** (optional, `public` profile) — terminates HTTPS for `PUBLIC_HOSTNAME` with an automatic Let's Encrypt certificate and proxies only `PUT /device` to `voice-pipeline:8081`; every other path is `404`.
 - **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, on `PIPELINE_BIND_ADDRESS`, loopback by default) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
 
@@ -24,7 +25,7 @@ docker compose ps      # asterisk and voice-pipeline should report "healthy"
 
 `./test-up.sh` tests the detection against stubbed `route` and `ipconfig`.
 
-Published ports: SIP `SIP_PORT` (UDP and TCP), RTP `RTP_START`–`RTP_END` (UDP, 1:1), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, and the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS` (both loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on. To run the stack on a cloud VM instead, see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
+Published ports: SIP `SIP_PORT` (UDP and TCP) and `TLS_PORT` (TCP, TLS), RTP `RTP_START`–`RTP_END` (UDP, 1:1), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, and the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS` (both loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on. To run the stack on a cloud VM instead, see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
 
 `LOCAL_NET` lists the networks Asterisk treats as local (loopback by default). Docker presents LAN peers from a gateway address in a private Docker range (`192.168.65.1` or a `172.x` address on Docker Desktop for macOS), so no private range may be listed, or the phone is given the container's internal address in SIP. The soft-phone endpoint's `media_address` is `HOST_LAN_IP`, so SDP always advertises the host for RTP.
 
@@ -39,6 +40,21 @@ DEVICE_BIND_ADDRESS=127.0.0.1   # keep the plain-HTTP device port off the public
 ```
 
 `./up.sh` then also starts `caddy`; the app uploads its token to `https://PUBLIC_HOSTNAME/device`. Without the `public` profile, `caddy` does not run and `PUBLIC_HOSTNAME` is not needed. With the profile on and `PUBLIC_HOSTNAME` unset, `caddy` exits with an error.
+
+### Encrypted calls
+
+With `PUBLIC_HOSTNAME` set, `asterisk` serves SIP over TLS (TLS 1.2 or newer) on `TLS_PORT` (default 5061, TCP) with Caddy's certificate for that host, and its endpoint requires SDES SRTP (`media_encryption=sdes`); a client offering plain RTP is refused. Plain UDP/TCP on `SIP_PORT` is not served. Leave `PUBLIC_HOSTNAME` unset for the LAN setup: plain UDP/TCP and plain RTP, with no certificate. `PUBLIC_HOSTNAME` therefore needs `COMPOSE_PROFILES=public`, which supplies the certificate. Because `mcp-server` originates to a single endpoint, a stack is either encrypted or plain, never both.
+
+`asterisk` mounts `caddy-data` read-only and waits at start until the certificate exists. Caddy writes the key as `root` with mode `0600`, so the entrypoint copies the certificate and key into `/etc/asterisk/keys`, owned by `asterisk`. It checks the certificate hourly (`CERT_CHECK_INTERVAL_S`) and, when Caddy renews it, stops Asterisk so the container's restart policy starts it with the new one; an active call ends. Open `TLS_PORT` (TCP) alongside the RTP range.
+
+Check the transport and the handshake with:
+
+```sh
+docker compose exec asterisk asterisk -rx 'pjsip show transports'
+openssl s_client -connect "$PUBLIC_HOSTNAME:5061" -servername "$PUBLIC_HOSTNAME"
+```
+
+`./test-render-config.sh` tests both renderings of the Asterisk config.
 
 Caddy keeps its data in the `caddy-data` volume (`phone-claude-local_caddy-data` on the host), mounted at `/data`. The certificate and key are at `caddy/certificates/acme-v02.api.letsencrypt.org-directory/<PUBLIC_HOSTNAME>/<PUBLIC_HOSTNAME>.crt` and `.key` within it; mount the volume read-only to share them with another service.
 

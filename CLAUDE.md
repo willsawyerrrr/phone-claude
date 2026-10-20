@@ -38,7 +38,11 @@ Asterisk drops a quiet AudioSocket connection. `ARI_BIND_ADDRESS` and
 ARI and pipeline API ports. The same stack runs on a single cloud VM
 (`docs/cloud-deploy.md`): `HOST_LAN_IP` is the VM's public IP, those two ports
 bind to its Tailscale IP, and `mcp-server` on the Mac reaches them over the
-tailnet. See `local/README.md` and `local/voice-pipeline/README.md`.
+tailnet. With `PUBLIC_HOSTNAME` set, `asterisk` instead serves SIP over TLS on
+`TLS_PORT` (5061) with Caddy's certificate (read from the `caddy-data` volume by
+`local/asterisk/start.sh`, which waits for it, copies it readable by `asterisk`
+and restarts Asterisk on renewal) and the endpoint requires SDES SRTP; plain
+SIP and RTP are served only when it is unset. See `local/README.md` and `local/voice-pipeline/README.md`.
 
 `ios/` is a SwiftUI soft-phone (not a pnpm package; the Xcode project is
 generated from `ios/project.yml` with XcodeGen) that registers to `asterisk`
@@ -63,7 +67,7 @@ device endpoint. See `ios/README.md`.
   minor bumps of the base image):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.
-- Stack start script: `shellcheck local/up.sh local/test-up.sh local/audition.sh && local/test-up.sh`.
+- Stack start script: `shellcheck local/up.sh local/test-up.sh local/audition.sh local/test-render-config.sh && local/test-up.sh && local/test-render-config.sh`.
 - iOS (CI and the TestFlight deploy both pin `macos-26` and Xcode 26.6, the
   newest GA Xcode on GitHub's runners): in `ios/`, `xcodegen generate`, then
   `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude
