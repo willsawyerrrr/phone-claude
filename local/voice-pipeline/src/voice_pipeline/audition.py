@@ -1,6 +1,6 @@
-"""Renders the audition prompts in each candidate voice and times the engines.
+"""Renders the audition prompts in each installed voice and times synthesis.
 
-    python -m voice_pipeline.audition OUT_DIR [engine:voice ...]
+    python -m voice_pipeline.audition OUT_DIR [voice ...]
 
 Writes one 16 kHz WAV per prompt and voice, and prints the real-time factor
 (synthesis time over audio duration; below 1 keeps up with a call).
@@ -34,16 +34,6 @@ PROMPTS = {
     "now, wait for staging, or split it into two smaller pull requests?",
 }
 
-CANDIDATES = [
-    "piper:en_US-lessac-medium",
-    "piper:en_US-lessac-high",
-    "piper:en_US-ryan-high",
-    "kokoro:af_heart",
-    "kokoro:af_bella",
-    "kokoro:am_michael",
-    "pocket:alba-casual",
-]
-
 
 def write_wav(path: Path, pcm: bytes) -> None:
     with wave.open(str(path), "wb") as wav:
@@ -57,7 +47,7 @@ def main(argv: list[str]) -> None:
     out = Path(argv[0])
     bank = SpeakerBank(Path(Settings.from_env().models_dir))
     installed = bank.available()
-    names = [n for n in (argv[1:] or CANDIDATES) if n in installed]
+    names = [n for n in (argv[1:] or installed) if n in installed]
     out.mkdir(parents=True, exist_ok=True)
 
     print(f"{'voice':28} " + " ".join(f"{p:>9}" for p in PROMPTS))
@@ -70,7 +60,7 @@ def main(argv: list[str]) -> None:
             pcm = speaker.synthesize(text)
             elapsed = time.perf_counter() - start
             factors.append(elapsed / (len(pcm) / BYTES_PER_SECOND))
-            write_wav(out / f"{prompt_id}--{name.replace(':', '-')}.wav", pcm)
+            write_wav(out / f"{prompt_id}--{name}.wav", pcm)
         print(f"{name:28} " + " ".join(f"{f:9.2f}" for f in factors), flush=True)
     print("words:", {p: len(t.split()) for p, t in PROMPTS.items()})
 

@@ -2,9 +2,9 @@
 # Compares text-to-speech voices on the same prompts.
 #
 # Usage:
-#   ./audition.sh render [engine:voice ...]   write 16 kHz WAVs to ./audition/
+#   ./audition.sh render [voice ...]          write 16 kHz WAVs to ./audition/
 #                                             and print each voice's real-time factor
-#   ./audition.sh call [--prompts a,b|all] [--voices engine:voice,...] [--no-shuffle]
+#   ./audition.sh call [--prompts a,b|all] [--voices voice,...] [--no-shuffle]
 #                                             ring the phone and play the voices
 #                                             blind, then print which was which
 #

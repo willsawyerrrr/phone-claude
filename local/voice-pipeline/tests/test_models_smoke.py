@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def spoken() -> bytes:
-    speaker = SpeakerBank(MODELS).get(SETTINGS.tts_voice_name)
+    speaker = SpeakerBank(MODELS).get(SETTINGS.tts_voice)
     return speaker.synthesize("Yes, go ahead and ship it.")
 
 

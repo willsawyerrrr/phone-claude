@@ -10,7 +10,7 @@ interface CallStatusResponse {
   error?: string;
 }
 
-/** Text for the pipeline to speak, in the named `engine:voice` if given. */
+/** Text for the pipeline to speak, in the named voice if given. */
 export interface Segment {
   text: string;
   voice?: string;

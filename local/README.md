@@ -77,12 +77,12 @@ Set `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_KEY_PATH` (host path to the `.p8` k
 
 ## Auditioning voices
 
-The image carries several text-to-speech voices (see [`voice-pipeline/README.md`](voice-pipeline/README.md#voices)); `TTS_ENGINE` and `TTS_VOICE` in `.env` choose the one that speaks on calls.
+The image carries two text-to-speech voices (see [`voice-pipeline/README.md`](voice-pipeline/README.md#voices)); `TTS_VOICE` in `.env` chooses the one that speaks on calls (`alba-casual` by default).
 
 ```sh
 ./audition.sh render                  # WAVs in ./audition/, and each voice's real-time factor
-./audition.sh call                    # rings the phone; plays every candidate blind, then prints the mapping
-./audition.sh call --prompts all --voices kokoro:af_heart,kokoro:am_michael,pocket:alba-casual
+./audition.sh call                    # rings the phone; plays every voice blind, then prints the mapping
+./audition.sh call --prompts all --voices alba-casual,alba-announcer
 ```
 
 `call` needs the stack up and `pnpm install` run at the repo root. Say "repeat" to hear it all again; any other reply ends the call and is printed with the mapping from "Voice one", "Voice two", … to voices.

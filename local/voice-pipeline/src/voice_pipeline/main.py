@@ -18,7 +18,7 @@ async def serve(settings: Settings) -> None:
         settings,
         lambda: SileroVad.load(vad_path, settings.vad_threshold),
         WhisperTranscriber(models / settings.whisper_model),
-        voices.get(settings.tts_voice_name),
+        voices.get(settings.tts_voice),
         voices=voices,
     )
 

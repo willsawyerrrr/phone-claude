@@ -30,8 +30,8 @@ phone's push token (`PUT /device` on the LAN port `DEVICE_PORT`, or over HTTPS a
 `COMPOSE_PROFILES=public`; bearer
 `SOFTPHONE_PASSWORD`, persisted in the `pipeline-data` volume) and sends the
 APNs VoIP push (`POST /push`, loopback). It speaks the question
-with local TTS (Piper by default; Kokoro and Kyutai Pocket TTS are selectable with
-`TTS_ENGINE`, and `local/audition.sh` compares them), listens with local VAD + STT, and exposes the `/calls` HTTP
+with local Kyutai Pocket TTS (`alba-casual` by default; `TTS_VOICE` selects
+`alba-announcer`, and `local/audition.sh` compares the voices), listens with local VAD + STT, and exposes the `/calls` HTTP
 API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. `ARI_BIND_ADDRESS` and
 `PIPELINE_BIND_ADDRESS` (both loopback by default) set the addresses of the

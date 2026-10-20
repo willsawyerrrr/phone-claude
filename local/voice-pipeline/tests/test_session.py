@@ -458,7 +458,7 @@ async def test_an_answer_containing_again_is_recorded(settings):
 
 
 async def test_segments_are_spoken_in_their_own_voices(settings):
-    voices = FakeVoices("kokoro:af_heart", "piper:en_US-lessac-high")
+    voices = FakeVoices("alba-casual", "alba-announcer")
     store = CallStore(ttl_s=60)
     record = store.register(
         CALL_ID,
@@ -466,8 +466,8 @@ async def test_segments_are_spoken_in_their_own_voices(settings):
         None,
         (
             Segment("Voice one."),
-            Segment("Ship it?", "kokoro:af_heart"),
-            Segment("Ship it?", "piper:en_US-lessac-high"),
+            Segment("Ship it?", "alba-casual"),
+            Segment("Ship it?", "alba-announcer"),
         ),
     )
     tts = FakeTts()
@@ -489,8 +489,8 @@ async def test_segments_are_spoken_in_their_own_voices(settings):
     assert (
         voices.spoken
         == [
-            ("kokoro:af_heart", "Ship it?"),
-            ("piper:en_US-lessac-high", "Ship it?"),
+            ("alba-casual", "Ship it?"),
+            ("alba-announcer", "Ship it?"),
         ]
         * 2
     )

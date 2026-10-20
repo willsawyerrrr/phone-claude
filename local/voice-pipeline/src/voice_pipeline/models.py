@@ -97,19 +97,8 @@ class WhisperTranscriber:
 # Flow-matching steps per Pocket TTS frame; more steps are cleaner and, at this
 # model size, barely slower.
 POCKET_STEPS = 5
-# ONNX Runtime threads for the sherpa-onnx engines.
-SHERPA_THREADS = 4
-
-
-def _sherpa_tts(model: object):
-    import sherpa_onnx
-
-    model.num_threads = SHERPA_THREADS
-    model.provider = "cpu"
-    config = sherpa_onnx.OfflineTtsConfig(model=model)
-    if not config.validate():
-        raise ValueError("invalid sherpa-onnx TTS configuration")
-    return sherpa_onnx.OfflineTts(config)
+# ONNX Runtime threads for Pocket TTS.
+POCKET_THREADS = 4
 
 
 class UnknownVoice(ValueError):
@@ -117,68 +106,26 @@ class UnknownVoice(ValueError):
 
 
 def _to_slin(samples: np.ndarray, rate: int) -> bytes:
-    """Resamples mono audio (int16 or float in [-1, 1]) to 16 kHz slin."""
-    if samples.dtype != np.int16:
-        samples = np.clip(samples, -1.0, 1.0) * 32767.0
-    resampled = soxr.resample(samples.astype(np.float32), rate, SAMPLE_RATE)
+    """Resamples a whole utterance of mono float audio in [-1, 1] to 16 kHz slin."""
+    resampled = soxr.resample(
+        np.clip(samples, -1.0, 1.0).astype(np.float32) * 32767.0, rate, SAMPLE_RATE
+    )
     return np.clip(np.rint(resampled), -32768, 32767).astype(np.int16).tobytes()
-
-
-class PiperSpeaker:
-    def __init__(self, voice_path: Path) -> None:
-        from piper import PiperVoice
-
-        self._voice = PiperVoice.load(voice_path)
-
-    def synthesize(self, text: str) -> bytes:
-        chunks = [chunk.audio_int16_array for chunk in self._voice.synthesize(text)]
-        speech = np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.int16)
-        return _to_slin(speech, self._voice.config.sample_rate)
-
-
-class KokoroSpeaker:
-    """Kokoro-82M (ONNX, run by sherpa-onnx) speaking as one of its voices.
-
-    The voices share one loaded model, which `load_model` returns.
-    """
-
-    # The release's voices.bin lists its English voices in this order.
-    VOICES = (
-        "af_alloy af_aoede af_bella af_heart af_jessica af_kore af_nicole af_nova "
-        "af_river af_sarah af_sky am_adam am_echo am_eric am_fenrir am_liam "
-        "am_michael am_onyx am_puck am_santa bf_alice bf_emma bf_isabella bf_lily "
-        "bm_daniel bm_fable bm_george bm_lewis"
-    ).split()
-
-    def __init__(self, model: object, voice: str) -> None:
-        if voice not in self.VOICES:
-            raise UnknownVoice(f"kokoro:{voice}")
-        self._tts = model
-        self._sid = self.VOICES.index(voice)
-
-    @staticmethod
-    def load_model(model_dir: Path) -> object:
-        import sherpa_onnx
-
-        kokoro = sherpa_onnx.OfflineTtsKokoroModelConfig(
-            model=str(model_dir / "model.onnx"),
-            voices=str(model_dir / "voices.bin"),
-            tokens=str(model_dir / "tokens.txt"),
-            lexicon=str(model_dir / "lexicon-us-en.txt"),
-            data_dir=str(model_dir / "espeak-ng-data"),
-        )
-        return _sherpa_tts(sherpa_onnx.OfflineTtsModelConfig(kokoro=kokoro))
-
-    def synthesize(self, text: str) -> bytes:
-        audio = self._tts.generate(text, sid=self._sid)
-        return _to_slin(np.asarray(audio.samples, dtype=np.float32), audio.sample_rate)
 
 
 class PocketSpeaker:
     """Kyutai Pocket TTS (int8 ONNX, run by sherpa-onnx), cloning the voice in a
     mono 16-bit WAV reference recording."""
 
-    def __init__(self, model_dir: Path, reference: Path) -> None:
+    def __init__(self, tts: object, reference: Path) -> None:
+        self._tts = tts
+        with wave.open(str(reference)) as wav:
+            pcm = np.frombuffer(wav.readframes(wav.getnframes()), dtype=np.int16)
+            self._reference_rate = wav.getframerate()
+        self._reference = pcm.astype(np.float32) / 32768.0
+
+    @staticmethod
+    def load_model(model_dir: Path) -> object:
         import sherpa_onnx
 
         pocket = sherpa_onnx.OfflineTtsPocketModelConfig(
@@ -190,11 +137,13 @@ class PocketSpeaker:
             vocab_json=str(model_dir / "vocab.json"),
             token_scores_json=str(model_dir / "token_scores.json"),
         )
-        self._tts = _sherpa_tts(sherpa_onnx.OfflineTtsModelConfig(pocket=pocket))
-        with wave.open(str(reference)) as wav:
-            pcm = np.frombuffer(wav.readframes(wav.getnframes()), dtype=np.int16)
-            self._reference_rate = wav.getframerate()
-        self._reference = pcm.astype(np.float32) / 32768.0
+        model = sherpa_onnx.OfflineTtsModelConfig(pocket=pocket)
+        model.num_threads = POCKET_THREADS
+        model.provider = "cpu"
+        config = sherpa_onnx.OfflineTtsConfig(model=model)
+        if not config.validate():
+            raise ValueError("invalid sherpa-onnx TTS configuration")
+        return sherpa_onnx.OfflineTts(config)
 
     def synthesize(self, text: str) -> bytes:
         import sherpa_onnx
@@ -208,29 +157,18 @@ class PocketSpeaker:
 
 
 class SpeakerBank:
-    """Loads speakers on first use, named `engine:voice` (`piper:en_US-lessac-medium`,
-    `kokoro:af_heart`, `pocket:alba-casual`)."""
+    """Loads Pocket TTS voices on first use, sharing one loaded model. A voice is
+    named for its reference recording (`alba-casual`)."""
 
     def __init__(self, models_dir: Path) -> None:
-        self._dir = models_dir
+        self._dir = models_dir / "pocket"
         self._speakers: dict[str, Speaker] = {}
-        self._kokoro: object | None = None
+        self._model: object | None = None
         self._lock = threading.Lock()
 
     def available(self) -> list[str]:
-        """The `engine:voice` names whose model files are installed."""
-        names = [
-            f"piper:{path.name.removesuffix('.onnx')}"
-            for path in sorted(self._dir.glob("*.onnx"))
-            if path.name != "silero_vad.onnx"
-        ]
-        if (self._dir / "kokoro" / "model.onnx").exists():
-            names += [f"kokoro:{voice}" for voice in KokoroSpeaker.VOICES]
-        names += [
-            f"pocket:{path.stem}"
-            for path in sorted((self._dir / "pocket" / "voices").glob("*.wav"))
-        ]
-        return names
+        """The names of the installed voices."""
+        return [path.stem for path in sorted((self._dir / "voices").glob("*.wav"))]
 
     def get(self, name: str) -> Speaker:
         """Returns the speaker, loading it on first use. Raises `UnknownVoice`
@@ -239,17 +177,9 @@ class SpeakerBank:
             if name not in self._speakers:
                 if name not in self.available():
                     raise UnknownVoice(name)
-                engine, _, voice = name.partition(":")
-                self._speakers[name] = self._load(engine, voice)
+                if self._model is None:
+                    self._model = PocketSpeaker.load_model(self._dir)
+                self._speakers[name] = PocketSpeaker(
+                    self._model, self._dir / "voices" / f"{name}.wav"
+                )
             return self._speakers[name]
-
-    def _load(self, engine: str, voice: str) -> Speaker:
-        if engine == "piper":
-            return PiperSpeaker(self._dir / f"{voice}.onnx")
-        if engine == "kokoro":
-            if self._kokoro is None:
-                self._kokoro = KokoroSpeaker.load_model(self._dir / "kokoro")
-            return KokoroSpeaker(self._kokoro, voice)
-        return PocketSpeaker(
-            self._dir / "pocket", self._dir / "pocket" / "voices" / f"{voice}.wav"
-        )
