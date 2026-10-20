@@ -39,7 +39,7 @@ services:
     restart: unless-stopped
     environment:
       NO_INPUT_TIMEOUT_S: ${NO_INPUT_TIMEOUT_S:-15}
-      QUIET_PERIOD_S: ${QUIET_PERIOD_S:-3}
+      QUIET_PERIOD_S: ${QUIET_PERIOD_S:-1.5}
       MAX_REPLY_S: ${MAX_REPLY_S:-60}
       MAX_REPEATS: ${MAX_REPEATS:-3}
       CALL_TTL_S: ${CALL_TTL_S:-3600}
