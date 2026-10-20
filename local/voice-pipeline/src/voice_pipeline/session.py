@@ -4,10 +4,13 @@ import re
 from collections import deque
 from collections.abc import Awaitable, Callable
 from enum import Enum
+from pathlib import Path
 
 from voice_pipeline.audiosocket import KIND_AUDIO, KIND_ERROR, KIND_HANGUP, Channel
+from voice_pipeline.capture import ListenCapture
 from voice_pipeline.config import BYTES_PER_SECOND, FRAME_BYTES, Settings
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
+from voice_pipeline.loudness import RelativeLoudnessGate
 from voice_pipeline.store import CallRecord, CallStore, Segment
 
 log = logging.getLogger(__name__)
@@ -99,6 +102,9 @@ class CallSession:
         self._outbound = bytearray()
         self._outbound_flushed = asyncio.Event()
         self._hung_up = asyncio.Event()
+        self._gate = RelativeLoudnessGate(settings.loudness_margin_db)
+        self._listens = 0
+        self._capture: ListenCapture | None = None
 
     async def run(self) -> None:
         call_id = self._record.call_id
@@ -201,6 +207,26 @@ class CallSession:
             await self._pace(FRAME_S)
 
     async def _listen(self) -> str | _NoInput:
+        """Listens for the caller's reply, recording it if `capture_dir` is set."""
+        if not self._settings.capture_dir:
+            return await self._await_reply()
+        self._listens += 1
+        self._capture = ListenCapture(
+            Path(self._settings.capture_dir),
+            self._record.call_id,
+            self._listens,
+            self._settings,
+        )
+        outcome = "cancelled"
+        try:
+            result = await self._await_reply()
+            outcome = result.value if isinstance(result, _NoInput) else result
+            return result
+        finally:
+            self._capture.save(outcome)
+            self._capture = None
+
+    async def _await_reply(self) -> str | _NoInput:
         """Waits for the caller's complete reply and transcribes it.
 
         A reply is complete once `quiet_period_s` passes with no further
@@ -217,6 +243,7 @@ class CallSession:
         """
         settings = self._settings
         self._vad.reset()
+        self._gate.reset()
         clock = 0.0
         speech_started: float | None = None
         last_speech = 0.0
@@ -243,9 +270,16 @@ class CallSession:
                     return await self._reply_at_hangup(audio, speech_started)
                 clock += len(frame) / BYTES_PER_SECOND
 
-                if self._vad.is_speech(frame):
+                speech = self._gate.admits(frame, self._vad.is_speech(frame))
+                if self._capture:
+                    self._capture.frame(
+                        frame, getattr(self._vad, "probability", None), speech
+                    )
+                if speech:
                     if speech_started is None:
                         speech_started = clock
+                        if self._capture:
+                            self._capture.event("speech_start")
                         audio.extend(b"".join(preroll))
                     audio.extend(frame)
                     last_speech = clock
@@ -264,6 +298,8 @@ class CallSession:
                 or clock - last_speech >= settings.quiet_period_s
                 or clock - speech_started >= settings.max_reply_s
             ):
+                if self._capture:
+                    self._capture.event("reply_end")
                 text = await asyncio.to_thread(self._stt.transcribe, bytes(audio))
                 text = text.strip()
                 if text:
@@ -274,6 +310,7 @@ class CallSession:
                 audio.clear()
                 preroll.clear()
                 self._vad.reset()
+                self._gate.reset()
 
     async def _reply_at_hangup(
         self, audio: bytearray, speech_started: float | None

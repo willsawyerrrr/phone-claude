@@ -23,6 +23,12 @@ class Settings:
     max_repeats: int = 3
     call_ttl_s: float = 3600.0
     vad_threshold: float = 0.5
+    # Speech more than this many dB quieter than the loudest speech so far is
+    # treated as background and doesn't hold a reply open; 0 disables.
+    loudness_margin_db: float = 12.0
+    # Directory to record each listening phase's audio and speech detection in;
+    # empty disables recording.
+    capture_dir: str = ""
     models_dir: str = "/models"
     whisper_model: str = "whisper-base.en"
     # The voice that speaks on calls: a Pocket TTS voice installed under `models_dir`.
@@ -49,6 +55,8 @@ class Settings:
             max_repeats=int(env("MAX_REPEATS", d.max_repeats)),
             call_ttl_s=float(env("CALL_TTL_S", d.call_ttl_s)),
             vad_threshold=float(env("VAD_THRESHOLD", d.vad_threshold)),
+            loudness_margin_db=float(env("LOUDNESS_MARGIN_DB", d.loudness_margin_db)),
+            capture_dir=env("CAPTURE_DIR", d.capture_dir),
             models_dir=env("MODELS_DIR", d.models_dir),
             whisper_model=env("WHISPER_MODEL", d.whisper_model),
             tts_voice=env("TTS_VOICE", d.tts_voice) or d.tts_voice,

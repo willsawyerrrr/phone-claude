@@ -26,7 +26,7 @@ Call state is held in memory and dropped after `CALL_TTL_S` (1 hour); an expired
 
 1. **Keep-alive.** Asterisk drops an AudioSocket connection that goes quiet, so a frame is sent every 20 ms from the moment the call connects until it ends: speech when there is some, silence otherwise, including while a model is running.
 2. **Speak.** TTS says `Context: <context> <question>` (or just the question). The caller isn't listened to while it plays.
-3. **Listen.** Silero VAD detects speech. A reply is complete once `QUIET_PERIOD_S` passes with no further speech, so a reply with pauses is captured whole; it is then transcribed in one pass. Replies are cut off after `MAX_REPLY_S`. If the caller hangs up after speaking, what they said is transcribed at once rather than waiting out the quiet period. Timing is measured in received audio, not wall-clock time; if no audio arrives at all, the wait is bounded by wall-clock time instead (`NO_INPUT_TIMEOUT_S` before the caller speaks, `QUIET_PERIOD_S` after), so the call still ends.
+3. **Listen.** Silero VAD detects speech. A reply is complete once `QUIET_PERIOD_S` passes with no further speech, so a reply with pauses is captured whole; it is then transcribed in one pass. Speech more than `LOUDNESS_MARGIN_DB` quieter than the loudest speech so far in the reply (a TV or other people in the background; the caller is closer to the phone) doesn't count towards the reply, so it ends `QUIET_PERIOD_S` after the caller stops rather than when the background does; it is still transcribed if it falls inside the reply. The VAD cannot tell a background talker from the caller, only a louder voice from a quieter one: background speech with no caller speaking, or one as loud as the caller, is heard as a reply. Replies are cut off after `MAX_REPLY_S`. If the caller hangs up after speaking, what they said is transcribed at once rather than waiting out the quiet period. Timing is measured in received audio, not wall-clock time; if no audio arrives at all, the wait is bounded by wall-clock time instead (`NO_INPUT_TIMEOUT_S` before the caller speaks, `QUIET_PERIOD_S` after), so the call still ends.
 4. **Repeat.** A reply that is just `again`, `pardon`, `repeat`, or similar, or that asks for the question (`can you repeat that`, `say that again`, `what was the question`), is not recorded; the question is spoken again as `One more time. …`, up to `MAX_REPEATS` times.
 5. **Outcome.** A reply sets `answered` and the pipeline says goodbye. Nothing said within `NO_INPUT_TIMEOUT_S` of a prompt, or the caller hanging up without having said anything intelligible, sets `failed`. So does an unexpected error in the call (`error: "The call failed unexpectedly"`). A second audio connection for a call already in progress is hung up on.
 
@@ -62,9 +62,22 @@ RTF (synthesis time over audio duration; below 1 keeps up with a call) is 0.48 f
 
 ## Configuration
 
-Environment variables, all optional (`docker-compose.yml` passes through all except `AUDIOSOCKET_PORT`, `HTTP_PORT`, `MODELS_DIR`, `WHISPER_MODEL`): `NO_INPUT_TIMEOUT_S` (15), `QUIET_PERIOD_S` (1.5), `MAX_REPLY_S` (60), `MAX_REPEATS` (3), `CALL_TTL_S` (3600), `VAD_THRESHOLD` (0.5), `AUDIOSOCKET_PORT` (9092), `HTTP_PORT` (8080), `MODELS_DIR` (`/models`), `WHISPER_MODEL` (`whisper-base.en`), `TTS_VOICE` (`alba-casual`; or `alba-announcer`).
+Environment variables, all optional (`docker-compose.yml` passes through all except `AUDIOSOCKET_PORT`, `HTTP_PORT`, `MODELS_DIR`, `WHISPER_MODEL`): `NO_INPUT_TIMEOUT_S` (15), `QUIET_PERIOD_S` (1.5), `MAX_REPLY_S` (60), `MAX_REPEATS` (3), `CALL_TTL_S` (3600), `VAD_THRESHOLD` (0.5), `LOUDNESS_MARGIN_DB` (12), `CAPTURE_DIR` (unset; see below), `AUDIOSOCKET_PORT` (9092), `HTTP_PORT` (8080), `MODELS_DIR` (`/models`), `WHISPER_MODEL` (`whisper-base.en`), `TTS_VOICE` (`alba-casual`; or `alba-announcer`).
 
 Push: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_FILE` (`/run/secrets/apns_key`), `APNS_TOPIC` (`dev.willsawyerrrr.phone-claude.voip`), `DEVICE_FILE` (`/data/device.json`), `DEVICE_PORT` (8081), `DEVICE_SECRET`.
+
+## Capturing audio to tune speech detection
+
+Set `CAPTURE_DIR` (in `local/.env`; a host path such as `./captures`, relative to `local/`) to record each listening phase as `<call id>-<n>.wav` (the caller's inbound 16 kHz audio) and `<call id>-<n>.json` (per 20 ms frame: Silero speech probability and the speech decision; the session's `speech_start` and `reply_end` times; the outcome). It is off by default. The recordings are the caller's room audio and stay on this machine until deleted; `local/captures/` is git-ignored.
+
+`scripts/analyze_capture.py` replays a WAV through candidate speech-detection policies (thresholds, hysteresis, minimum speech duration, smoothing, an energy gate) and prints when each would end the reply and what Whisper hears in the audio it would send. From `local/`:
+
+```sh
+docker compose run --rm --no-deps -v ./voice-pipeline/scripts:/scripts -v ./captures:/captures \
+  voice-pipeline python /scripts/analyze_capture.py /captures/<call id>-1.wav
+```
+
+See the script's docstring for the `--policy` syntax.
 
 ## Tests
 

@@ -1,6 +1,8 @@
 import asyncio
+import json
 import threading
 import time
+import wave
 
 import pytest
 
@@ -15,6 +17,7 @@ from tests.conftest import (
     quiet,
     talk,
 )
+from voice_pipeline.config import FRAME_BYTES, Settings
 from voice_pipeline.session import REPEAT_PATTERN, CallSession, _RealtimePacer
 from voice_pipeline.store import CallStore, Segment
 
@@ -494,3 +497,43 @@ async def test_segments_are_spoken_in_their_own_voices(settings):
         ]
         * 2
     )
+
+
+async def test_listening_is_recorded_when_capture_is_enabled(tmp_path):
+    settings = Settings(quiet_period_s=0.5, capture_dir=str(tmp_path))
+    channel = FakeChannel(talk(0.2) + quiet(1.0))
+    session, _, _ = make_session(channel, FakeStt("yes"), settings)
+
+    await session.run()
+
+    [wav_path] = tmp_path.glob("*.wav")
+    [json_path] = tmp_path.glob("*.json")
+    with wave.open(str(wav_path)) as wav:
+        assert wav.getframerate() == 16000
+        frames = wav.getnframes() // 320
+    sidecar = json.loads(json_path.read_text())
+    assert sidecar["outcome"] == "yes"
+    assert len(sidecar["frames"]) == frames > 0
+    assert [event[1] for event in sidecar["events"]] == ["speech_start", "reply_end"]
+
+
+async def test_nothing_is_recorded_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    channel = FakeChannel(talk(0.2) + quiet(1.0))
+    session, _, _ = make_session(channel, FakeStt("yes"), Settings(quiet_period_s=0.5))
+
+    await session.run()
+
+    assert list(tmp_path.iterdir()) == []
+
+
+async def test_quieter_background_speech_does_not_hold_the_reply_open():
+    loud = [b"\x00\x40" * (FRAME_BYTES // 2)] * round(0.4 / 0.02)
+    background = [b"\x01\x00" * (FRAME_BYTES // 2)] * round(3.0 / 0.02)
+    settings = Settings(quiet_period_s=0.5, loudness_margin_db=10)
+    stt = FakeStt("yes")
+    session, _, _ = make_session(FakeChannel(loud + background), stt, settings)
+
+    await session.run()
+
+    assert len(stt.utterances[0]) <= FRAME_BYTES * round(1.2 / 0.02)
