@@ -121,7 +121,7 @@ describe("client", () => {
 
   describe("startCall", () => {
     it("registers segments with the pipeline when given", async () => {
-      const segments = [{ text: "One.", voice: "kokoro:af_heart" }];
+      const segments = [{ text: "One.", voice: "alba-casual" }];
 
       await startCall(config, callId, "Audition", undefined, segments);
 

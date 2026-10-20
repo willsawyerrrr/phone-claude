@@ -44,8 +44,7 @@ services:
       MAX_REPEATS: ${MAX_REPEATS:-3}
       CALL_TTL_S: ${CALL_TTL_S:-3600}
       VAD_THRESHOLD: ${VAD_THRESHOLD:-0.5}
-      TTS_ENGINE: ${TTS_ENGINE:-piper}
-      TTS_VOICE: ${TTS_VOICE:-}
+      TTS_VOICE: ${TTS_VOICE:-alba-casual}
       APNS_KEY_ID: ${APNS_KEY_ID:-}
       APNS_TEAM_ID: ${APNS_TEAM_ID:-}
       APNS_TOPIC: ${APNS_TOPIC:-dev.willsawyerrrr.phone-claude.voip}

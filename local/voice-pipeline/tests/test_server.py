@@ -65,7 +65,7 @@ async def pipeline(settings, tmp_path, pusher):
         no_pace,
         DeviceStore(tmp_path / "device.json"),
         pusher,
-        FakeVoices("piper:a", "kokoro:af_heart"),
+        FakeVoices("a", "alba-casual"),
     )
 
 
@@ -365,14 +365,14 @@ async def test_device_app_exposes_only_device_registration(device_http):
 async def test_audition_offers_the_installed_candidates_and_the_prompts(http):
     body = await (await http.get("/audition")).json()
 
-    assert body["default"] == "piper:en_US-lessac-medium"
-    assert body["candidates"] == ["kokoro:af_heart"]
+    assert body["default"] == "alba-casual"
+    assert body["candidates"] == ["a", "alba-casual"]
     assert set(body["prompts"]) == set(PROMPTS)
 
 
 async def test_registering_a_call_with_segments(http):
     response = await register(
-        http, segments=[{"text": "One."}, {"text": "Two.", "voice": "kokoro:af_heart"}]
+        http, segments=[{"text": "One."}, {"text": "Two.", "voice": "alba-casual"}]
     )
 
     assert response.status == 201
@@ -383,7 +383,7 @@ async def test_registering_a_call_with_segments(http):
     [
         [],
         "text",
-        [{"voice": "piper:a"}],
+        [{"voice": "a"}],
         [{"text": " "}],
         [{"text": "x", "voice": "nope"}],
     ],

@@ -4,11 +4,13 @@ import { buildSegments, shuffled } from "./audition.js";
 
 describe("buildSegments", () => {
   it("reads each prompt in every voice, numbering the voices", () => {
-    expect(buildSegments(["Ship it?"], ["piper:a", "kokoro:b"])).toEqual([
+    expect(
+      buildSegments(["Ship it?"], ["alba-casual", "alba-announcer"]),
+    ).toEqual([
       { text: "Voice one." },
-      { text: "Ship it?", voice: "piper:a" },
+      { text: "Ship it?", voice: "alba-casual" },
       { text: "Voice two." },
-      { text: "Ship it?", voice: "kokoro:b" },
+      { text: "Ship it?", voice: "alba-announcer" },
       { text: "That was all of them. Which voice did you like best?" },
     ]);
   });

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from aiohttp import web
 
 from voice_pipeline.audiosocket import KIND_UUID, StreamChannel, read_frame
-from voice_pipeline.audition import CANDIDATES, PROMPTS
+from voice_pipeline.audition import PROMPTS
 from voice_pipeline.config import Settings
 from voice_pipeline.devices import DeviceStore, parse_device
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
@@ -198,7 +198,7 @@ class Pipeline:
                 {
                     "error": "Body must be {callId: uuid, question: string, "
                     "context?: string, segments?: [{text: string, "
-                    "voice?: an installed engine:voice}]}"
+                    "voice?: an installed voice}]}"
                 },
                 status=400,
             )
@@ -228,8 +228,8 @@ class Pipeline:
         installed = self._voices.available() if self._voices else []
         return web.json_response(
             {
-                "default": self.settings.tts_voice_name,
-                "candidates": [name for name in CANDIDATES if name in installed],
+                "default": self.settings.tts_voice,
+                "candidates": installed,
                 "prompts": PROMPTS,
             }
         )

@@ -1,13 +1,14 @@
 import numpy as np
 import pytest
 
-from voice_pipeline.config import FRAME_BYTES, Settings
+from voice_pipeline.config import FRAME_BYTES
 from voice_pipeline.models import (
     VAD_CONTEXT,
     VAD_WINDOW,
     SileroVad,
     SpeakerBank,
     UnknownVoice,
+    _to_slin,
 )
 
 
@@ -72,40 +73,24 @@ def test_reset_clears_the_verdict_and_state():
     assert not vad.is_speech(FRAME)
 
 
-def test_the_bank_lists_the_voices_whose_models_are_installed(tmp_path):
-    (tmp_path / "silero_vad.onnx").touch()
-    (tmp_path / "en_US-lessac-medium.onnx").touch()
-    (tmp_path / "pocket" / "voices").mkdir(parents=True)
-    (tmp_path / "pocket" / "voices" / "alba-casual.wav").touch()
+def test_the_bank_lists_the_installed_voices(tmp_path):
+    voices = tmp_path / "pocket" / "voices"
+    voices.mkdir(parents=True)
+    (voices / "alba-casual.wav").touch()
+    (voices / "alba-announcer.wav").touch()
 
-    available = SpeakerBank(tmp_path).available()
-
-    assert available == ["piper:en_US-lessac-medium", "pocket:alba-casual"]
-
-
-def test_the_bank_lists_every_kokoro_voice_once_its_model_is_installed(tmp_path):
-    (tmp_path / "kokoro").mkdir()
-    (tmp_path / "kokoro" / "model.onnx").touch()
-
-    available = SpeakerBank(tmp_path).available()
-
-    assert "kokoro:af_heart" in available
-    assert "kokoro:am_michael" in available
+    assert SpeakerBank(tmp_path).available() == ["alba-announcer", "alba-casual"]
 
 
 def test_the_bank_refuses_a_voice_that_is_not_installed(tmp_path):
     with pytest.raises(UnknownVoice):
-        SpeakerBank(tmp_path).get("piper:missing")
+        SpeakerBank(tmp_path).get("missing")
 
 
-@pytest.mark.parametrize(
-    ("engine", "voice", "name"),
-    [
-        ("piper", "", "piper:en_US-lessac-medium"),
-        ("kokoro", "", "kokoro:af_heart"),
-        ("pocket", "", "pocket:alba-casual"),
-        ("kokoro", "am_michael", "kokoro:am_michael"),
-    ],
-)
-def test_the_default_voice_follows_the_engine(engine, voice, name):
-    assert Settings(tts_engine=engine, tts_voice=voice).tts_voice_name == name
+def test_a_whole_utterance_is_resampled_to_16khz_in_one_pass():
+    tone = np.sin(np.linspace(0, 2 * np.pi * 440, 24000, endpoint=False))
+
+    pcm = _to_slin(tone.astype(np.float32), 24000)
+
+    assert len(pcm) == 16000 * 2
+    assert np.abs(np.frombuffer(pcm, dtype=np.int16)).max() > 30000

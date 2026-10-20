@@ -188,7 +188,7 @@ home network, so the phone must be on it.
   just-completed answer does not overwrite it.
 
 STT and TTS run on CPU inside the 4 GB Docker VM, on arm64 and amd64. Model
-choice, the selectable TTS voices (`TTS_ENGINE`, `TTS_VOICE`) and how to
+choice, the selectable TTS voices (`TTS_VOICE`) and how to
 audition them (`local/audition.sh`) are documented in
 `local/voice-pipeline/README.md`. There is
 no LLM stage: a call is one question and one reply.

@@ -7,7 +7,7 @@ CallStatus = Literal["pending", "answered", "failed"]
 
 @dataclass(frozen=True)
 class Segment:
-    """Text to speak, in the voice named `engine:voice` (the default if unset)."""
+    """Text to speak, in the voice named voice (the default if unset)."""
 
     text: str
     voice: str | None = None
