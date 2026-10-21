@@ -34,7 +34,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_TEAM: 8558CXPT9G
-        MARKETING_VERSION: "1.0"
+        MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_CFBundleDisplayName: Phone Claude
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
