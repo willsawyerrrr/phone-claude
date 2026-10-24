@@ -21,24 +21,24 @@ Claude Code ──ask_by_phone──▶ mcp-server                        ▲   
 
 ### 1. Start the local stack
 
-Run the Asterisk + voice-pipeline Docker Compose stack (`local/`) and pair your phone's SIP soft-phone (any SIP app, or the [`ios/`](ios/README.md) app) with it. Note the ARI credentials, the soft-phone's PJSIP endpoint name, and the ports the stack publishes.
+Run the Asterisk + voice-pipeline Docker Compose stack (`local/`, started with the same Environment) and pair your phone's SIP soft-phone (any SIP app, or the [`ios/`](ios/README.md) app) with it. Note the ARI credentials, the soft-phone's PJSIP endpoint name, and the ports the stack publishes.
 
 ### 2. Run `mcp-server` locally
 
 Run `pnpm install` once. The repo's `.mcp.json` registers `mcp-server` for Claude Code sessions started in the checkout, launching it through `bin/phone-claude-mcp-server.js`. The shim builds `mcp-server` on first launch and whenever its sources change (build output goes to stderr), so there is no build step and no absolute path.
 
-Export the ARI credentials where Claude Code starts, since `.mcp.json` reads them from the environment:
+Configuration lives in a [1Password Environment](https://developer.1password.com/docs/environments) read by the [`op` CLI](https://developer.1password.com/docs/cli); no `.env` file is used locally. It holds `SOFTPHONE_PASSWORD`, `ARI_USERNAME`, `ARI_PASSWORD`, and optionally `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_PATH` and any variable below or in [`local/.env.example`](local/.env.example). Copy its ID from the 1Password app (Developer > View Environments > Manage environment > Copy environment ID) and export it where Claude Code starts, since `.mcp.json` launches the shim through `op run --environment "${OP_ENVIRONMENT_ID}"`:
 
 ```sh
-export ARI_USERNAME=<ARI user> ARI_PASSWORD=<ARI password>
+export OP_ENVIRONMENT_ID=<environment id>
 ```
 
 To use it from other projects, register the shim at user scope instead:
 
 ```sh
 claude mcp add --scope user phone-claude \
-  --env ARI_USERNAME=<ARI user> --env ARI_PASSWORD=<ARI password> \
-  -- node /absolute/path/to/phone-claude/bin/phone-claude-mcp-server.js
+  -- op run --environment <environment id> --no-masking -- \
+  node /absolute/path/to/phone-claude/bin/phone-claude-mcp-server.js
 ```
 
 The shim path stays valid across `pnpm install` and rebuilds; only moving the checkout changes it.

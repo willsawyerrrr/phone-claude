@@ -22,7 +22,7 @@ Needs a paid Apple Developer account. Debug builds use the APNs sandbox; archive
 
 1. In Xcode, select the `PhoneClaude` target, Signing & Capabilities, choose your team, and make sure Push Notifications is enabled (the bundle ID `dev.willsawyerrrr.phone-claude` gets it automatically from the `aps-environment` entitlement).
 2. In the developer portal (Certificates, Identifiers & Profiles, Keys), create a key with Apple Push Notifications service (APNs) enabled and download the `.p8` once. Note its Key ID and your Team ID.
-3. Put the key outside the repo, make it readable by the container (`chmod 644`), and set `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_KEY_PATH` in `local/.env` (see [`../local/README.md`](../local/README.md#ringing-a-locked-phone)). Restart the stack.
+3. Put the key outside the repo, make it readable by the container (`chmod 644`), and set `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_KEY_PATH` in the Environment (see [`../local/README.md`](../local/README.md#ringing-a-locked-phone)). Restart the stack.
 
 ## Pair with Asterisk
 

@@ -13,7 +13,12 @@ pnpm workspace with one package:
 
 `local/` is that stack's Docker Compose definition (not a pnpm package). Start
 it with `local/up.sh`, which detects the Mac's LAN IP and exports it as
-`HOST_LAN_IP` (it overrides `.env`); `local/test-up.sh` tests the detection. The
+`HOST_LAN_IP` (it overrides the Environment and `.env`); with `OP_ENVIRONMENT_ID`
+set it runs Compose under `op run --environment`, and a host with no 1Password
+(the cloud VM) leaves it unset and uses `.env`. `.mcp.json` launches the shim
+through `op run --environment "${OP_ENVIRONMENT_ID}" --no-masking` (stdout
+carries MCP traffic), so secrets come from the 1Password Environment, not a
+`.env` file. `local/test-up.sh` tests the detection. The
 `asterisk` service renders its config from env at container start
 (`local/asterisk/render-config.sh`), so it runs unchanged on any host. It has
 one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
