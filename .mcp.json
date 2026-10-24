@@ -1,12 +1,16 @@
 {
   "mcpServers": {
     "phone-claude": {
-      "command": "node",
-      "args": ["bin/phone-claude-mcp-server.js"],
-      "env": {
-        "ARI_USERNAME": "${ARI_USERNAME}",
-        "ARI_PASSWORD": "${ARI_PASSWORD}"
-      }
+      "command": "op",
+      "args": [
+        "run",
+        "--environment",
+        "${OP_ENVIRONMENT_ID}",
+        "--no-masking",
+        "--",
+        "node",
+        "bin/phone-claude-mcp-server.js"
+      ]
     }
   }
 }

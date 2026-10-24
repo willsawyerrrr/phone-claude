@@ -57,7 +57,7 @@ Do not open `22`, `8080`, `8081` or `8088`; SSH goes through Tailscale (`ssh roo
 
 ## Stack
 
-Clone the repo on the VM, then in `local/`:
+The VM has no 1Password, so it keeps its configuration in `.env` (leave `OP_ENVIRONMENT_ID` unset). Clone the repo on the VM, then in `local/`:
 
 ```sh
 cp .env.example .env

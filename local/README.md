@@ -1,6 +1,6 @@
 # Local voice stack
 
-A Docker Compose stack that rings a SIP soft-phone on the local network, with no carrier involved. It runs on any machine with Docker; everything host-specific comes from `.env` or, for `HOST_LAN_IP`, `up.sh`.
+A Docker Compose stack that rings a SIP soft-phone on the local network, with no carrier involved. It runs on any machine with Docker; everything host-specific comes from the 1Password Environment (or `.env` on a host with no 1Password) or, for `HOST_LAN_IP`, `up.sh`.
 
 Services:
 
@@ -14,7 +14,7 @@ The AudioSocket connection is made only once the phone answers.
 ## Setup
 
 ```sh
-cp .env.example .env   # set SOFTPHONE_PASSWORD, ARI_PASSWORD
+export OP_ENVIRONMENT_ID=<environment id>   # holds SOFTPHONE_PASSWORD, ARI_PASSWORD
 ./up.sh                # the first build downloads the speech models (~2.8 GB image)
 docker compose ps      # asterisk and voice-pipeline should report "healthy"
 ```
@@ -22,6 +22,8 @@ docker compose ps      # asterisk and voice-pipeline should report "healthy"
 `up.sh` detects this machine's current LAN IPv4 (the default-route interface, else `en0`/`en1`; never a tunnel, VPN or Docker interface), prints it, exports it as `HOST_LAN_IP`, and runs `docker compose up -d --build "$@"`. Re-run it after the IP changes: Compose recreates the containers whose configuration changed. `./up.sh --print` only prints the IP. `HOST_LAN_IP=<ip> ./up.sh` overrides detection (skipping the macOS-only `route`/`ipconfig` calls, so it works on Linux); without it, `up.sh` fails if no IP is found.
 
 `HOST_LAN_IP` is this machine's LAN address as the phone reaches it. Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this machine, and the device-registration port (`DEVICE_PORT`) is published on it. An exported `HOST_LAN_IP` takes precedence over `.env`, so leave it out of `.env`; a bare `docker compose` command reads only `.env` and fails without it.
+
+The Environment holds the variables listed in `.env.example`; only `SOFTPHONE_PASSWORD` and `ARI_PASSWORD` are required, and the rest default as documented there. Copy the Environment's ID from the 1Password app: Developer > View Environments > Manage environment > Copy environment ID. With `OP_ENVIRONMENT_ID` set, `up.sh` runs Compose under `op run --environment`; run any other `docker compose` command in this directory the same way (`op run --environment "$OP_ENVIRONMENT_ID" -- docker compose ps`). On a host with no 1Password (a cloud VM), unset it and copy `.env.example` to `.env` instead.
 
 `./test-up.sh` tests the detection against stubbed `route` and `ipconfig`.
 
@@ -31,7 +33,7 @@ Published ports: SIP `SIP_PORT` (UDP and TCP) and `TLS_PORT` (TCP, TLS), RTP `RT
 
 ## Public HTTPS (cloud host)
 
-When the stack runs on a host the phone reaches over cellular, the device endpoint must be HTTPS. Point a DNS record for `PUBLIC_HOSTNAME` at the host, open port 443, and set in `.env`:
+When the stack runs on a host the phone reaches over cellular, the device endpoint must be HTTPS. Point a DNS record for `PUBLIC_HOSTNAME` at the host, open port 443, and set in the Environment (or `.env`):
 
 ```sh
 COMPOSE_PROFILES=public
@@ -93,7 +95,7 @@ Set `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_KEY_PATH` (host path to the `.p8` k
 
 ## Auditioning voices
 
-The image carries two text-to-speech voices (see [`voice-pipeline/README.md`](voice-pipeline/README.md#voices)); `TTS_VOICE` in `.env` chooses the one that speaks on calls (`alba-casual` by default).
+The image carries two text-to-speech voices (see [`voice-pipeline/README.md`](voice-pipeline/README.md#voices)); `TTS_VOICE` chooses the one that speaks on calls (`alba-casual` by default).
 
 ```sh
 ./audition.sh render                  # WAVs in ./audition/, and each voice's real-time factor

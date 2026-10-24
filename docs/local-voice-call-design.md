@@ -50,7 +50,7 @@ Lives under `local/`. Two services on one Docker network:
   API, the phone's push token, and the APNs sender.
 
 `docker compose up` is the whole install. Every host-specific value comes from
-env (`local/.env`, template in `.env.example`), so the same stack runs on any
+env (a 1Password Environment, or `local/.env` where there is none; variables in `.env.example`), so the same stack runs on any
 machine: `HOST_LAN_IP`, the soft-phone's SIP credentials, ARI credentials, and
 published ports. Nothing in the images or committed config names a machine.
 
