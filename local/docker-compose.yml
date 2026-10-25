@@ -88,7 +88,7 @@ services:
 
 secrets:
   apns_key:
-    file: ${APNS_KEY_PATH:-/dev/null}
+    file: ${HOME}/.config/phone-claude/apns_key.p8
 
 volumes:
   pipeline-data:

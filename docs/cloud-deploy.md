@@ -74,7 +74,7 @@ DEVICE_BIND_ADDRESS=127.0.0.1
 COMPOSE_PROFILES=public
 PUBLIC_HOSTNAME=phone-claude.willsawyerrrr.dev
 LOCAL_NET=127.0.0.0/8
-# APNS_* as in local/README.md; copy the .p8 key to the VM and set APNS_KEY_PATH
+# APNS_* as in local/README.md; copy the .p8 key to ~/.config/phone-claude/apns_key.p8 on the VM
 ```
 
 Start it with the reserved IP as `HOST_LAN_IP`:

@@ -91,7 +91,7 @@ The Mac's Bonjour name (`scutil --get LocalHostName`, resolved as `<LocalHostNam
 - **Sender.** `POST /push` on the pipeline (loopback) sends an APNs HTTP/2 VoIP push (topic `APNS_TOPIC`, priority 10, 30 s expiry) with token-based auth. It returns `404` with no registered device, `503` if APNs is not configured, and `502` if APNs rejects it; a rejected token is forgotten.
 - **Registration.** The app un-registers (`Expires: 0`) before it stops in the background, so the endpoint goes offline at once. The endpoint's AOR expires registrations in 120 s by default (30–300 s) and qualifies every 5 s with a 2 s timeout, so a contact that vanishes without un-registering (a crash, a lost network) goes unavailable within about 7 s and the next `ask_by_phone` pushes instead of dialling a dead contact. The qualify `OPTIONS` is one small packet per 5 s to a single contact, which a live phone answers well within 2 s.
 
-Set `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_KEY_PATH` (host path to the `.p8` key, see [`../ios/README.md`](../ios/README.md#apple-setup)). The key is mounted read-only into the container as the `pipeline` user, so it must be readable by others (`chmod 644`). Never commit it.
+Set `APNS_KEY_ID` and `APNS_TEAM_ID`, and save the `.p8` key at `~/.config/phone-claude/apns_key.p8` (see [`../ios/README.md`](../ios/README.md#apple-setup)). The key is mounted read-only into the container as the `pipeline` user, so it must be readable by others (`chmod 644`). Never commit it.
 
 ## Auditioning voices
 
