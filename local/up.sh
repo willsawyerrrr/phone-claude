@@ -6,6 +6,10 @@
 #
 # `HOST_LAN_IP` in the environment overrides detection. Either way it is
 # exported, and an exported variable takes precedence over `.env` in Compose.
+#
+# With `OP_ENVIRONMENT_ID` set, Compose runs under `op run --environment` so the
+# 1Password Environment supplies the rest of the configuration; without it,
+# Compose reads `.env` (a host with no 1Password, such as a cloud VM).
 set -eu
 
 # Prints the IPv4 of the default-route interface, else of `en0`/`en1`. Skips
@@ -45,6 +49,9 @@ main() {
     return 0
   fi
   cd "$(dirname "$0")"
+  if [ -n "${OP_ENVIRONMENT_ID:-}" ]; then
+    exec op run --environment "$OP_ENVIRONMENT_ID" -- docker compose up -d --build "$@"
+  fi
   exec docker compose up -d --build "$@"
 }
 

@@ -68,12 +68,13 @@ Push: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_FILE` (`/run/secrets/apns_key`), 
 
 ## Capturing audio to tune speech detection
 
-Set `CAPTURE_DIR` (in `local/.env`; a host path such as `./captures`, relative to `local/`) to record each listening phase as `<call id>-<n>.wav` (the caller's inbound 16 kHz audio) and `<call id>-<n>.json` (per 20 ms frame: Silero speech probability and the speech decision; the session's `speech_start` and `reply_end` times; the outcome). It is off by default. The recordings are the caller's room audio and stay on this machine until deleted; `local/captures/` is git-ignored.
+Set `CAPTURE_DIR` (in the Environment; a host path such as `./captures`, relative to `local/`) to record each listening phase as `<call id>-<n>.wav` (the caller's inbound 16 kHz audio) and `<call id>-<n>.json` (per 20 ms frame: Silero speech probability and the speech decision; the session's `speech_start` and `reply_end` times; the outcome). It is off by default. The recordings are the caller's room audio and stay on this machine until deleted; `local/captures/` is git-ignored.
 
 `scripts/analyze_capture.py` replays a WAV through candidate speech-detection policies (thresholds, hysteresis, minimum speech duration, smoothing, an energy gate) and prints when each would end the reply and what Whisper hears in the audio it would send. From `local/`:
 
 ```sh
-docker compose run --rm --no-deps -v ./voice-pipeline/scripts:/scripts -v ./captures:/captures \
+op run --environment "$OP_ENVIRONMENT_ID" -- \
+  docker compose run --rm --no-deps -v ./voice-pipeline/scripts:/scripts -v ./captures:/captures \
   voice-pipeline python /scripts/analyze_capture.py /captures/<call id>-1.wav
 ```
 
