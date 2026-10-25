@@ -90,8 +90,12 @@ docker run --rm voice-pipeline-test`.
 - `.github/workflows/deploy-ios.yml` runs on pushes to `main` that touch
   `ios/`. It calls platform's reusable `ios-testflight.yml`, which archives
   the `PhoneClaude` scheme and uploads it to TestFlight; the build number is
-  the run number. It needs the `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8`
-  repository secrets. It is not part of `CI Status`.
+  the run number. It needs the repository secret
+  `OP_SERVICE_ACCOUNT_TOKEN` (a service account scoped to the Environments) and
+  the repository variable `OP_ENVIRONMENT_IDS`
+  (`b5zkkwxuutlttwbrv5xhgojye4 ufudw2eopg5tmebz6ptldpitki`: Apple Development
+  for `ASC_*` and `DEVELOPMENT_TEAM`, then Phone Claude); see platform's
+  `docs/1password-environments.md`. It is not part of `CI Status`.
 
 ## Local call round-trip
 
