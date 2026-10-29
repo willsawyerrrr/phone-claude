@@ -1,0 +1,39 @@
+name: Tailscale policy
+
+on:
+  push:
+    branches: [main]
+    paths: ["policy.hujson"]
+  pull_request:
+    paths: ["policy.hujson"]
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: willsawyerrrr/platform/.github/actions/load-op-environment@main
+        with:
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          environments: ${{ vars.OP_ENVIRONMENT_IDS }}
+
+      - name: Test policy
+        if: github.event_name == 'pull_request'
+        uses: tailscale/gitops-acl-action@v1
+        with:
+          oauth-client-id: ${{ env.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          tailnet: tail8e5593.ts.net
+          action: test
+
+      - name: Apply policy
+        if: github.event_name == 'push'
+        uses: tailscale/gitops-acl-action@v1
+        with:
+          oauth-client-id: ${{ env.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          tailnet: tail8e5593.ts.net
+          action: apply

@@ -1,0 +1,60 @@
+{
+	"grants": [
+		{
+			"src": ["wmsawyer2609@gmail.com"],
+			"dst": ["tag:phone-claude-vps"],
+			"ip":  ["22"],
+		},
+		{
+			"src": ["wmsawyer2609@gmail.com"],
+			"dst": ["tag:phone-claude-vps"],
+			"ip":  ["8080"],
+		},
+		{
+			"src": ["wmsawyer2609@gmail.com"],
+			"dst": ["tag:phone-claude-vps"],
+			"ip":  ["8088"],
+		},
+		{
+			"src": ["wmsawyer2609@gmail.com"],
+			"dst": ["tag:phone-claude-vps"],
+			"ip":  ["8090"],
+		},
+		{
+			"src": ["tag:ci"],
+			"dst": ["tag:phone-claude-vps"],
+			"ip":  ["22"],
+		},
+	],
+
+	// Define users and devices that can use Tailscale SSH.
+	"ssh": [
+		// Allow all users to SSH into their own devices in check mode.
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+		// Allows SSH as root to the Phone Claude VPS (tag:phone-claude-vps) over Tailscale, since public SSH (port 22) is closed at the cloud firewall.
+		{
+			"src":    ["autogroup:member"],
+			"dst":    ["tag:phone-claude-vps"],
+			"users":  ["root", "autogroup:nonroot"],
+			"action": "accept",
+		},
+		{
+			"src":    ["tag:ci"],
+			"dst":    ["tag:phone-claude-vps"],
+			"users":  ["root"],
+			"action": "accept",
+		},
+	],
+
+	"tagOwners": {
+		// Phone Claude cloud VPS running the Asterisk/voice-pipeline stack (SIP, RTP, HTTPS device endpoint, ARI/pipeline reachable only over Tailscale).
+		"tag:phone-claude-vps": ["wmsawyer2609@gmail.com"],
+
+		"tag:ci": ["wmsawyer2609@gmail.com"],
+	},
+}
