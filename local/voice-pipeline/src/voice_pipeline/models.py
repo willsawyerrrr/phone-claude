@@ -17,6 +17,12 @@ from voice_pipeline.engines import Speaker
 VAD_WINDOW = 512
 VAD_CONTEXT = 64
 
+# Native thread budget for STT/TTS inference, leaving one core free for the
+# event loop that paces outbound audio to Asterisk in real time. Without this
+# headroom, synthesis or transcription saturating every core stalls that
+# loop's 20 ms ticks, which then burst catch-up frames and glitch playback.
+WORKER_THREADS = max(1, min(4, (os.cpu_count() or 4) - 1))
+
 
 class _OnnxSession(Protocol):
     def run(self, output_names, input_feed): ...
@@ -85,7 +91,12 @@ class WhisperTranscriber:
     def __init__(self, model_dir: Path) -> None:
         from faster_whisper import WhisperModel
 
-        self._model = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
+        self._model = WhisperModel(
+            str(model_dir),
+            device="cpu",
+            compute_type="int8",
+            cpu_threads=WORKER_THREADS,
+        )
 
     def transcribe(self, pcm: bytes) -> str:
         samples = np.frombuffer(pcm, dtype=np.int16)
@@ -103,10 +114,6 @@ class WhisperTranscriber:
 # Flow-matching steps per Pocket TTS frame; more steps are cleaner and, at this
 # model size, barely slower.
 POCKET_STEPS = 5
-# ONNX Runtime threads for Pocket TTS. Oversubscribing past the host's CPU
-# count thrashes rather than speeds up synthesis, starving the event loop
-# that paces audio to Asterisk and producing audible glitches.
-POCKET_THREADS = min(4, os.cpu_count() or 4)
 
 
 class UnknownVoice(ValueError):
@@ -146,7 +153,7 @@ class PocketSpeaker:
             token_scores_json=str(model_dir / "token_scores.json"),
         )
         model = sherpa_onnx.OfflineTtsModelConfig(pocket=pocket)
-        model.num_threads = POCKET_THREADS
+        model.num_threads = WORKER_THREADS
         model.provider = "cpu"
         config = sherpa_onnx.OfflineTtsConfig(model=model)
         if not config.validate():
