@@ -5,7 +5,7 @@
       "args": [
         "run",
         "--environment",
-        "${OP_ENVIRONMENT_ID}",
+        "ufudw2eopg5tmebz6ptldpitki",
         "--no-masking",
         "--",
         "node",
