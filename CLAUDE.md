@@ -115,6 +115,14 @@ docker run --rm voice-pipeline-test`.
   granting it root. Rebuilding briefly interrupts any in-progress call; it is
   not part of `CI Status`.
 
+- `.github/workflows/tailscale-policy.yml` runs on changes to `policy.hujson`
+  (pull request: `tailscale/gitops-acl-action` `test`; push to `main`:
+  `apply`). It owns the tailnet's policy (GitOps; the admin console's editor
+  is locked, pointed at this repo — see `docs/cloud-deploy.md`), loading
+  `TAILSCALE_OAUTH_CLIENT_ID`/`TAILSCALE_OAUTH_CLIENT_SECRET` the same way
+  `deploy-vps.yml` does — one OAuth client, scoped to both `auth_keys` and
+  `policy_file`, backs both workflows. It is not part of `CI Status`.
+
 ## Local call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and

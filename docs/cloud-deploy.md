@@ -20,42 +20,12 @@ tailscale ip -4   # the VM's tailnet IP
 ```
 
 - Create the auth key in the Tailscale admin console with tag `tag:phone-claude-vps` (add the tag to `tagOwners`).
-- The tailnet is `tail8e5593.ts.net`. Policy, in the current `grants` syntax ([migration guide](https://tailscale.com/docs/reference/migrate-acls-grants); Tailscale SSH stays a separate `ssh` section under either syntax):
+- The tailnet is `tail8e5593.ts.net`. Its policy is this repo's own [`policy.hujson`](../policy.hujson), synced by `.github/workflows/tailscale-policy.yml` (GitOps; [setup guide](https://tailscale.com/docs/integrations/github/gitops)) — propose a policy change the same way as any other change here, by editing that file and opening a PR. It validates and test-checks the policy on the PR, and applies it on merge to `main`; the admin console's editor is locked (Access controls → "Prevent edits in the admin console"), pointed at this repo. It is not part of `CI Status`.
+- `tag:ci` is the tag `.github/workflows/deploy-vps.yml` advertises when it joins the tailnet (via `tailscale/github-action`, scope `auth_keys`); add the tag to `tagOwners` alongside `tag:phone-claude-vps`.
 
-```json
-{
-  "grants": [
-    {
-      "src": ["wmsawyer2609@gmail.com"],
-      "dst": ["tag:phone-claude-vps"],
-      "ip": ["tcp:8080,8088,8090"]
-    },
-    {
-      "src": ["tag:ci"],
-      "dst": ["tag:phone-claude-vps"],
-      "ip": ["tcp:22"]
-    }
-  ],
-  "ssh": [
-    {
-      "action": "accept",
-      "src": ["autogroup:member"],
-      "dst": ["tag:phone-claude-vps"],
-      "users": ["root", "autogroup:nonroot"]
-    },
-    {
-      "action": "accept",
-      "src": ["tag:ci"],
-      "dst": ["tag:phone-claude-vps"],
-      "users": ["root"]
-    }
-  ]
-}
-```
+One Tailscale OAuth client, scoped to both `auth_keys` and `policy_file`, backs both workflows: its ID and secret are `TAILSCALE_OAUTH_CLIENT_ID`/`TAILSCALE_OAUTH_CLIENT_SECRET` in the Phone Claude 1Password Environment, loaded the same way `deploy-vps.yml` already does (`willsawyerrrr/platform/.github/actions/load-op-environment@main`, the repository secret `OP_SERVICE_ACCOUNT_TOKEN` and variable `OP_ENVIRONMENT_IDS`) — no separate credential to create or store for the policy sync.
 
-`tag:ci` is the tag `.github/workflows/deploy-vps.yml` advertises when it joins the tailnet via a Tailscale OAuth client scoped to `auth_keys` and that tag; add the tag to `tagOwners` alongside `tag:phone-claude-vps`. Store the client's ID and secret as `TAILSCALE_OAUTH_CLIENT_ID`/`TAILSCALE_OAUTH_CLIENT_SECRET` in the Phone Claude 1Password Environment.
-
-The `ssh` section alone isn't enough for `tag:ci`: without a matching `grants` (or legacy `acls`) entry, the node can't even resolve `phone-claude-vps.tail8e5593.ts.net` — the `ssh` rule only governs access once a connection reaches the host, while `grants`/`acls` governs whether the node can see and reach it at all. A deploy failing with `ssh: Could not resolve hostname` points at this.
+`policy.hujson`'s `ssh` section alone isn't enough for `tag:ci`: without a matching `grants` entry too, the node can't even resolve `phone-claude-vps.tail8e5593.ts.net` — the `ssh` rule only governs access once a connection reaches the host, while `grants` governs whether the node can see and reach it at all. A deploy failing with `ssh: Could not resolve hostname` points at this.
 
 ## Firewall
 
