@@ -1,0 +1,13 @@
+# Keeps the Docker build context (repo root, for mcp-server/Dockerfile) small.
+.git/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.tsbuildinfo
+
+ios/
+local/audition/
+local/captures/
+local/voice-pipeline/.venv/
+local/voice-pipeline/**/__pycache__/

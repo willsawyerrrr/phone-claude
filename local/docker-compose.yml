@@ -65,6 +65,32 @@ services:
       - "${PIPELINE_BIND_ADDRESS:-127.0.0.1}:${PIPELINE_PORT:-8080}:8080"
       - "${DEVICE_BIND_ADDRESS:-${HOST_LAN_IP:?Set HOST_LAN_IP to this machine's LAN IP}}:${DEVICE_PORT:-8081}:8081"
 
+  mcp-server:
+    build:
+      context: ..
+      dockerfile: mcp-server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      asterisk:
+        condition: service_healthy
+      voice-pipeline:
+        condition: service_started
+    environment:
+      ARI_URL: http://asterisk:8088
+      PIPELINE_URL: http://voice-pipeline:8080
+      ARI_USERNAME: ${ARI_USERNAME:-phone-claude}
+      ARI_PASSWORD: ${ARI_PASSWORD:?Set ARI_PASSWORD}
+      SIP_ENDPOINT: ${SOFTPHONE_USERNAME:-phone}
+      DIALPLAN_CONTEXT: ${DIALPLAN_CONTEXT:-ask-by-phone}
+      DIALPLAN_EXTENSION: ${DIALPLAN_EXTENSION:-700}
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-3000}
+      MAX_WAIT_MS: ${MAX_WAIT_MS:-600000}
+      PUSH_WAIT_MS: ${PUSH_WAIT_MS:-20000}
+      RING_TIMEOUT_S: ${RING_TIMEOUT_S:-60}
+      MCP_PORT: 8090
+    ports:
+      - "${MCP_BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-8090}:8090"
+
   # Public HTTPS front for the device endpoint; enabled by `COMPOSE_PROFILES=public`.
   caddy:
     profiles: [public]

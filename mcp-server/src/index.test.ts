@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import type { Config } from "./config.js";
 
 const registerTool = vi.fn();
@@ -15,9 +23,6 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
     return {};
   }),
 }));
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const config: Config = {
   pipelineUrl: "http://localhost:8080",
@@ -45,191 +50,69 @@ vi.mock("./client.js", () => ({
   cancelCall: vi.fn(),
 }));
 
-const { startCall, pollForAnswer, cancelCall } = await import("./client.js");
+const { startCall, cancelCall } = await import("./client.js");
+
+// `index.ts` wires everything up as a side effect of being imported (once —
+// ES modules are cached, matching how it only ever runs once as a process
+// entrypoint); `server.test.ts` covers the tool/shutdown behaviour this
+// wiring delegates to in depth.
 await import("./index.js");
 
-/** The `ask_by_phone` handler `index.ts` passed to `registerTool`. */
 const handler = registerTool.mock.calls[0]?.[2] as (args: {
   question: string;
-  context?: string;
 }) => Promise<unknown>;
+
+// Vitest clears every mock's recorded calls before each test runs, so the
+// module-load-time call counts above have to be snapshotted here, in
+// `beforeAll` (which runs before that per-test clearing), rather than read
+// from `loadConfig`/`connect` directly inside an `it`.
+let loadConfigCallsAtStartup = 0;
+let connectCallsAtStartup = 0;
+let registerToolArgsAtStartup: unknown[] | undefined;
+beforeAll(() => {
+  loadConfigCallsAtStartup = vi.mocked(loadConfig).mock.calls.length;
+  connectCallsAtStartup = connect.mock.calls.length;
+  registerToolArgsAtStartup = registerTool.mock.calls[0];
+});
 
 async function flushAsync(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-describe("shutdown on SIGINT/SIGTERM", () => {
-  let exitSpy: ReturnType<typeof vi.spyOn>;
+describe("index.ts (stdio entrypoint)", () => {
+  it("loads the config once, registers ask_by_phone, and connects the stdio transport", () => {
+    expect(loadConfigCallsAtStartup).toBe(1);
+    expect(registerToolArgsAtStartup?.[0]).toBe("ask_by_phone");
+    expect(registerToolArgsAtStartup?.[2]).toEqual(expect.any(Function));
+    expect(connectCallsAtStartup).toBe(1);
+  });
 
-  beforeEach(() => {
-    exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
-      return undefined as never;
+  describe("shutdown", () => {
+    let exitSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+        return undefined as never;
+      });
+      vi.mocked(cancelCall).mockReset().mockResolvedValue(undefined);
+      vi.mocked(startCall).mockReset();
     });
-    vi.mocked(cancelCall).mockReset().mockResolvedValue(undefined);
-    vi.mocked(startCall).mockReset();
-    vi.mocked(pollForAnswer).mockReset();
-  });
 
-  afterEach(() => {
-    exitSpy.mockRestore();
-  });
-
-  it("exits without cancelling when no call is in flight", async () => {
-    process.emit("SIGINT");
-    await flushAsync();
-
-    expect(cancelCall).not.toHaveBeenCalled();
-    expect(exitSpy).toHaveBeenCalledWith(130);
-  });
-
-  it("cancels the in-flight call on SIGINT", async () => {
-    vi.mocked(startCall).mockResolvedValue(undefined);
-    vi.mocked(pollForAnswer).mockReturnValue(new Promise(() => {})); // never resolves
-
-    void handler({ question: "Deploy?" });
-    await flushAsync();
-    const callId = vi.mocked(startCall).mock.calls[0]![1];
-
-    process.emit("SIGINT");
-    await flushAsync();
-
-    expect(callId).toMatch(UUID_PATTERN);
-    expect(cancelCall).toHaveBeenCalledWith(config, callId);
-    expect(exitSpy).toHaveBeenCalledWith(130);
-  });
-
-  it("cancels the in-flight call on SIGTERM", async () => {
-    vi.mocked(startCall).mockResolvedValue(undefined);
-    vi.mocked(pollForAnswer).mockReturnValue(new Promise(() => {})); // never resolves
-
-    void handler({ question: "Deploy?" });
-    await flushAsync();
-    const callId = vi.mocked(startCall).mock.calls[0]![1];
-
-    process.emit("SIGTERM");
-    await flushAsync();
-
-    expect(cancelCall).toHaveBeenCalledWith(config, callId);
-    expect(exitSpy).toHaveBeenCalledWith(143);
-  });
-
-  it("cancels a call interrupted while it is still starting", async () => {
-    vi.mocked(startCall).mockReturnValue(new Promise(() => {})); // never resolves
-
-    void handler({ question: "Deploy?" });
-    await flushAsync();
-    const callId = vi.mocked(startCall).mock.calls[0]![1];
-
-    process.emit("SIGINT");
-    await flushAsync();
-
-    expect(cancelCall).toHaveBeenCalledWith(config, callId);
-  });
-
-  it("cancels every concurrent in-flight call", async () => {
-    vi.mocked(startCall).mockResolvedValue(undefined);
-    vi.mocked(pollForAnswer).mockReturnValue(new Promise(() => {})); // never resolves
-
-    void handler({ question: "One?" });
-    void handler({ question: "Two?" });
-    await flushAsync();
-    const [first, second] = vi
-      .mocked(startCall)
-      .mock.calls.map((call) => call[1]);
-
-    process.emit("SIGINT");
-    await flushAsync();
-
-    expect(first).not.toBe(second);
-    expect(cancelCall).toHaveBeenCalledWith(config, first);
-    expect(cancelCall).toHaveBeenCalledWith(config, second);
-  });
-
-  it("keeps a call tracked when another call finishes first", async () => {
-    vi.mocked(startCall).mockResolvedValue(undefined);
-    vi.mocked(pollForAnswer)
-      .mockReturnValueOnce(new Promise(() => {})) // never resolves
-      .mockResolvedValueOnce("Yes");
-
-    void handler({ question: "Slow?" });
-    await flushAsync();
-    await handler({ question: "Fast?" });
-    const [slow, fast] = vi
-      .mocked(startCall)
-      .mock.calls.slice(-2)
-      .map((call) => call[1]);
-
-    process.emit("SIGINT");
-    await flushAsync();
-
-    expect(cancelCall).toHaveBeenCalledWith(config, slow);
-    expect(cancelCall).not.toHaveBeenCalledWith(config, fast);
-  });
-});
-
-describe("ask_by_phone", () => {
-  it("returns the answer", async () => {
-    vi.mocked(startCall).mockReset().mockResolvedValue(undefined);
-    vi.mocked(pollForAnswer).mockReset().mockResolvedValue("Yes");
-
-    await expect(handler({ question: "Deploy?" })).resolves.toEqual({
-      content: [{ type: "text", text: "Yes" }],
+    afterEach(() => {
+      exitSpy.mockRestore();
     });
-  });
 
-  it.each([
-    ["starting the call", () => vi.mocked(startCall)],
-    ["waiting for the answer", () => vi.mocked(pollForAnswer)],
-  ])("falls back to chat when %s fails", async (_name, failing) => {
-    vi.mocked(startCall).mockReset().mockResolvedValue(undefined);
-    vi.mocked(pollForAnswer).mockReset().mockResolvedValue("Yes");
-    failing().mockRejectedValue(new Error("fetch failed"));
+    it("cancels an in-flight call and exits on SIGINT", async () => {
+      vi.mocked(startCall).mockReturnValue(new Promise(() => {})); // never resolves
 
-    await expect(handler({ question: "Deploy?" })).resolves.toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Could not get a phone answer (fetch failed). Ask the user in chat instead.",
-        },
-      ],
-      isError: true,
-    });
-  });
-});
+      void handler({ question: "Deploy?" });
+      await flushAsync();
 
-describe("configuration", () => {
-  it("loads the config once, not per call", async () => {
-    vi.mocked(startCall).mockReset().mockResolvedValue(undefined);
-    vi.mocked(pollForAnswer).mockReset().mockResolvedValue("Yes");
-    vi.mocked(loadConfig).mockClear();
+      process.emit("SIGINT");
+      await flushAsync();
 
-    await handler({ question: "Deploy?" });
-    await handler({ question: "Deploy?" });
-
-    expect(loadConfig).not.toHaveBeenCalled();
-  });
-
-  it("reports an invalid configuration through the chat fallback", async () => {
-    vi.resetModules();
-    registerTool.mockClear();
-    vi.mocked(loadConfig).mockImplementationOnce(() => {
-      throw new Error("Missing required env var: ARI_USERNAME");
-    });
-    await import("./index.js");
-    const failing = registerTool.mock.calls[0]?.[2] as typeof handler;
-
-    const result = await failing({ question: "Deploy?" });
-
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: expect.stringContaining(
-            "Missing required env var: ARI_USERNAME",
-          ),
-        },
-      ],
-      isError: true,
+      expect(cancelCall).toHaveBeenCalledWith(config, expect.any(String));
+      expect(exitSpy).toHaveBeenCalledWith(130);
     });
   });
 });
