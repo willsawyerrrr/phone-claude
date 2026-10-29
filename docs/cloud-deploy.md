@@ -37,10 +37,18 @@ tailscale ip -4   # the VM's tailnet IP
       "src": ["autogroup:member"],
       "dst": ["tag:phone-claude-vps"],
       "users": ["root", "autogroup:nonroot"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:ci"],
+      "dst": ["tag:phone-claude-vps"],
+      "users": ["root"]
     }
   ]
 }
 ```
+
+`tag:ci` is the tag `.github/workflows/deploy-vps.yml` advertises when it joins the tailnet via a Tailscale OAuth client scoped to `auth_keys` and that tag; add the tag to `tagOwners` alongside `tag:phone-claude-vps`. Store the client's ID and secret as `TAILSCALE_OAUTH_CLIENT_ID`/`TAILSCALE_OAUTH_CLIENT_SECRET` in the Phone Claude 1Password Environment.
 
 ## Firewall
 
