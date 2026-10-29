@@ -18,7 +18,7 @@ class Settings:
     # themselves) to settle right after answering. The opening segment is
     # pre-synthesized, so it otherwise has no synthesis delay of its own to
     # cover for this.
-    answer_settle_s: float = 0.3
+    answer_settle_s: float = 0.6
     # How long to wait for the caller to say anything at all after a prompt.
     no_input_timeout_s: float = 15.0
     # Silence after speech that marks the caller's reply as complete.
