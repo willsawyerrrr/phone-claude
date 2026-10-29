@@ -1,5 +1,6 @@
 """CPU-only speech models behind the `engines` interfaces."""
 
+import os
 import threading
 import wave
 from pathlib import Path
@@ -102,8 +103,10 @@ class WhisperTranscriber:
 # Flow-matching steps per Pocket TTS frame; more steps are cleaner and, at this
 # model size, barely slower.
 POCKET_STEPS = 5
-# ONNX Runtime threads for Pocket TTS.
-POCKET_THREADS = 4
+# ONNX Runtime threads for Pocket TTS. Oversubscribing past the host's CPU
+# count thrashes rather than speeds up synthesis, starving the event loop
+# that paces audio to Asterisk and producing audible glitches.
+POCKET_THREADS = min(4, os.cpu_count() or 4)
 
 
 class UnknownVoice(ValueError):
