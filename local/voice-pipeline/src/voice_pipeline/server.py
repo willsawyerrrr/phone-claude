@@ -13,7 +13,7 @@ from voice_pipeline.devices import DeviceStore, parse_device
 from voice_pipeline.engines import Speaker, Transcriber, VoiceActivityDetector
 from voice_pipeline.models import SpeakerBank
 from voice_pipeline.push import ApnsPusher, NoDevice, NotConfigured, PushError
-from voice_pipeline.session import CallSession, Pace
+from voice_pipeline.session import CallSession, Pace, synthesize_segment
 from voice_pipeline.store import CallStore, Segment
 
 log = logging.getLogger(__name__)
@@ -52,6 +52,10 @@ class Pipeline:
         self._voices = voices
         self._pace = pace
         self._sessions: dict[str, asyncio.Task] = {}
+        self._warm_first_segments: dict[str, asyncio.Task[bytes]] = {}
+
+    def _pop_warm_first_segment(self, call_id: str) -> asyncio.Task[bytes] | None:
+        return self._warm_first_segments.pop(call_id, None)
 
     def cancel(self, call_id: str) -> bool:
         """Marks a pending call failed and hangs up its audio connection.
@@ -61,6 +65,9 @@ class Pipeline:
         task = self._sessions.get(call_id)
         if cancelled and task is not None:
             task.cancel()
+        warm = self._pop_warm_first_segment(call_id)
+        if warm is not None:
+            warm.cancel()
         return cancelled
 
     async def shutdown(self) -> None:
@@ -70,6 +77,9 @@ class Pipeline:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        for warm in self._warm_first_segments.values():
+            warm.cancel()
+        self._warm_first_segments.clear()
         await self.pusher.aclose()
 
     async def handle_audiosocket(
@@ -87,6 +97,10 @@ class Pipeline:
             or record.call_id in self._sessions
         ):
             log.warning("rejecting audio connection for call %s", call_id)
+            if call_id is not None:
+                warm = self._pop_warm_first_segment(call_id)
+                if warm is not None:
+                    warm.cancel()
             await channel.send_hangup()
             await channel.close()
             return
@@ -101,6 +115,7 @@ class Pipeline:
             self.settings,
             self._pace,
             self._voices.get if self._voices else None,
+            self._pop_warm_first_segment(record.call_id),
         )
         self._sessions[record.call_id] = task = asyncio.current_task()
         try:
@@ -205,6 +220,13 @@ class Pipeline:
         record = self.store.register(call_id, question, context or None, segments)
         if record is None:
             return web.json_response({"error": "callId already exists"}, status=409)
+        # Synthesized while the phone rings, so it's ready the moment the
+        # caller answers instead of making them wait out TTS first.
+        first = record.script[0]
+        voices = self._voices.get if self._voices else None
+        self._warm_first_segments[call_id] = asyncio.create_task(
+            asyncio.to_thread(synthesize_segment, first, self._tts, voices)
+        )
         return web.json_response(record.to_json(), status=201)
 
     def _parse_segments(self, raw: object) -> tuple[Segment, ...] | None:
