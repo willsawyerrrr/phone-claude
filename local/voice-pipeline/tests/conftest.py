@@ -115,7 +115,11 @@ def quiet(seconds: float) -> list[bytes]:
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
-        no_input_timeout_s=1.0, quiet_period_s=0.5, max_reply_s=5.0, max_repeats=2
+        answer_settle_s=0.0,
+        no_input_timeout_s=1.0,
+        quiet_period_s=0.5,
+        max_reply_s=5.0,
+        max_repeats=2,
     )
 
 

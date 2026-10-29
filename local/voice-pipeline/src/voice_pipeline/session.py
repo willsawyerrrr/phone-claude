@@ -152,9 +152,14 @@ class CallSession:
     async def _converse(self) -> None:
         call_id = self._record.call_id
         script = self._record.script
+        await asyncio.sleep(self._settings.answer_settle_s)
         repeats = 0
         while True:
-            await self._speak(script)
+            if not await self._speak(script):
+                # Hung up before the prompt was ever delivered: whatever
+                # arrived in the meantime isn't a reply to anything.
+                self._store.fail(call_id, HANGUP_ERROR)
+                return
             outcome = await self._listen()
 
             if outcome is _NoInput.HUNG_UP:
@@ -187,7 +192,9 @@ class CallSession:
             if frame.kind == KIND_AUDIO:
                 self._inbox.put_nowait(frame.payload)
 
-    async def _speak(self, script: tuple[Segment, ...]) -> None:
+    async def _speak(self, script: tuple[Segment, ...]) -> bool:
+        """Speaks the script, returning `False` without playing anything if
+        the caller had already hung up."""
         for segment in script:
             if self._warm is not None:
                 warm, self._warm = self._warm, None
@@ -195,10 +202,11 @@ class CallSession:
             else:
                 pcm = await asyncio.to_thread(self._synthesize, segment)
             if self._hung_up.is_set():
-                return
+                return False
             self._outbound_flushed.clear()
             self._outbound.extend(pcm)
             await self._outbound_flushed.wait()
+        return True
 
     def _synthesize(self, segment: Segment) -> bytes:
         return synthesize_segment(segment, self._tts, self._voices)

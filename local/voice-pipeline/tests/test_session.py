@@ -76,6 +76,24 @@ async def test_a_warmed_first_segment_is_spoken_without_resynthesizing(settings)
     assert channel.speech_frames[0] == b"\x09" * FRAME_BYTES
 
 
+async def test_the_prompt_waits_out_the_answer_settle_period(settings):
+    settle_settings = Settings(
+        answer_settle_s=0.05,
+        no_input_timeout_s=settings.no_input_timeout_s,
+        quiet_period_s=settings.quiet_period_s,
+        max_reply_s=settings.max_reply_s,
+        max_repeats=settings.max_repeats,
+    )
+    channel = FakeChannel(talk(0.2) + quiet(1.0))
+    session, _, _ = make_session(channel, FakeStt("ok"), settle_settings)
+
+    started = time.monotonic()
+    await session.run()
+
+    assert channel.speech_frames
+    assert time.monotonic() - started >= settle_settings.answer_settle_s
+
+
 async def test_speaks_context_before_question(settings):
     channel = FakeChannel(talk(0.2) + quiet(1.0))
     session, _, tts = make_session(
