@@ -20,21 +20,21 @@ tailscale ip -4   # the VM's tailnet IP
 ```
 
 - Create the auth key in the Tailscale admin console with tag `tag:phone-claude-vps` (add the tag to `tagOwners`).
-- The tailnet is `tailbc0238.ts.net`. ACL granting only the Mac user access to the two ports:
+- The tailnet is `tail8e5593.ts.net`. ACL granting only the Mac user access to the two ports:
 
 ```json
 {
   "acls": [
     {
       "action": "accept",
-      "src": ["will@willsawyerrrr.dev"],
+      "src": ["wmsawyer2609@gmail.com"],
       "dst": ["tag:phone-claude-vps:8080,8088"]
     }
   ],
   "ssh": [
     {
       "action": "accept",
-      "src": ["autogroup:member"],
+      "src": ["wmsawyer2609@gmail.com"],
       "dst": ["tag:phone-claude-vps"],
       "users": ["root", "autogroup:nonroot"]
     }
@@ -84,6 +84,8 @@ HOST_LAN_IP=<reserved IP> ./up.sh
 ```
 
 The override skips `up.sh`'s macOS `route`/`ipconfig` detection, so it works on Linux. Re-run it with the same value to apply `.env` changes. Start Tailscale first so the tailnet IP exists to bind to.
+
+Running this from a script with no login shell (e.g. a cloud-init `user_data` script) leaves `HOME` unset, so Compose resolves the `apns_key` secret's `${HOME}/.config/phone-claude/apns_key.p8` to the wrong path and the `voice-pipeline` container fails to start. Export `HOME=/root` (or the invoking user's home) before calling `up.sh` in that case.
 
 `LOCAL_NET` stays loopback only. On a public host every peer is non-local, so Asterisk gives the phone `HOST_LAN_IP` in SIP and SDP; listing a private range would hand it a container address.
 
