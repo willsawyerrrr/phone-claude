@@ -1,0 +1,34 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches: [main]
+    paths: ["local/**"]
+  workflow_dispatch:
+
+concurrency: deploy-vps
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: willsawyerrrr/platform/.github/actions/load-op-environment@main
+        with:
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          environments: ${{ vars.OP_ENVIRONMENT_IDS }}
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ env.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
+      - name: Deploy
+        env:
+          VPS_HOST: ${{ vars.VPS_TAILNET_HOST }}
+          HOST_LAN_IP: ${{ vars.VPS_RESERVED_IP }}
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new "root@$VPS_HOST" \
+            "cd /opt/phone-claude && git fetch origin main && git reset --hard origin/main && cd local && HOME=/root HOST_LAN_IP=$HOST_LAN_IP ./up.sh"

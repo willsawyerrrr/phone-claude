@@ -97,6 +97,15 @@ docker run --rm voice-pipeline-test`.
   for `ASC_*` and `DEVELOPMENT_TEAM`, then Phone Claude); see platform's
   `docs/1password-environments.md`. It is not part of `CI Status`.
 
+- `.github/workflows/deploy-vps.yml` runs on pushes to `main` that touch
+  `local/`. It joins the tailnet as `tag:ci` (via `tailscale/github-action`,
+  using `TAILSCALE_OAUTH_CLIENT_ID`/`TAILSCALE_OAUTH_CLIENT_SECRET` from the
+  Phone Claude Environment), then SSHes to `phone-claude-vps` (the repository
+  variables `VPS_TAILNET_HOST` and `VPS_RESERVED_IP`), resets it to
+  `origin/main`, and re-runs `./up.sh`. The tailnet ACL's `ssh` rule must
+  grant `tag:ci` root access to `tag:phone-claude-vps`. Rebuilding briefly
+  interrupts any in-progress call; it is not part of `CI Status`.
+
 ## Local call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and
