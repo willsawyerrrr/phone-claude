@@ -167,6 +167,10 @@ class PocketSpeaker:
         config.reference_audio = self._reference
         config.reference_sample_rate = self._reference_rate
         config.num_steps = POCKET_STEPS
+        # Sherpa-onnx's default (0.2) compresses punctuation pauses to a fifth
+        # of their predicted length, which reads as rushed on short phrases
+        # where pauses are a larger share of the total duration.
+        config.silence_scale = 1.0
         audio = self._tts.generate(text, config)
         return _to_slin(np.asarray(audio.samples, dtype=np.float32), audio.sample_rate)
 
