@@ -2,12 +2,17 @@
 # certificate and exposes only the device-registration endpoint.
 # Certificates are stored in the `caddy-data` volume (`/data`), under
 # `caddy/certificates/acme-v02.api.letsencrypt.org-directory/<host>/<host>.{crt,key}`.
+# `route` runs its directives in the order written; without it Caddy sorts
+# `respond` ahead of `reverse_proxy`, so the unconditional 404 would answer
+# every request before the matcher below ever got a chance to run.
 {$PUBLIC_HOSTNAME} {
 	@device {
 		path /device
 		method PUT
 	}
-	reverse_proxy @device voice-pipeline:8081
 
-	respond 404
+	route {
+		reverse_proxy @device voice-pipeline:8081
+		respond 404
+	}
 }
