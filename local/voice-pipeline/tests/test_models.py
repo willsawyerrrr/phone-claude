@@ -1,6 +1,9 @@
+import importlib
+
 import numpy as np
 import pytest
 
+import voice_pipeline.models as models_module
 from voice_pipeline.config import FRAME_BYTES
 from voice_pipeline.models import (
     VAD_CONTEXT,
@@ -94,3 +97,15 @@ def test_a_whole_utterance_is_resampled_to_16khz_in_one_pass():
 
     assert len(pcm) == 16000 * 2
     assert np.abs(np.frombuffer(pcm, dtype=np.int16)).max() > 30000
+
+
+@pytest.mark.parametrize(("cpu_count", "expected"), [(1, 1), (2, 1), (3, 2), (8, 4)])
+def test_worker_threads_leaves_a_core_for_the_event_loop(
+    monkeypatch, cpu_count, expected
+):
+    monkeypatch.setattr("os.cpu_count", lambda: cpu_count)
+    try:
+        importlib.reload(models_module)
+        assert models_module.WORKER_THREADS == expected
+    finally:
+        importlib.reload(models_module)
