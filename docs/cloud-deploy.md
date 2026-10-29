@@ -20,15 +20,20 @@ tailscale ip -4   # the VM's tailnet IP
 ```
 
 - Create the auth key in the Tailscale admin console with tag `tag:phone-claude-vps` (add the tag to `tagOwners`).
-- The tailnet is `tail8e5593.ts.net`. ACL granting only the Mac user access to the three ports:
+- The tailnet is `tail8e5593.ts.net`. Policy, in the current `grants` syntax ([migration guide](https://tailscale.com/docs/reference/migrate-acls-grants); Tailscale SSH stays a separate `ssh` section under either syntax):
 
 ```json
 {
-  "acls": [
+  "grants": [
     {
-      "action": "accept",
       "src": ["wmsawyer2609@gmail.com"],
-      "dst": ["tag:phone-claude-vps:8080,8088,8090"]
+      "dst": ["tag:phone-claude-vps"],
+      "ip": ["tcp:8080,8088,8090"]
+    },
+    {
+      "src": ["tag:ci"],
+      "dst": ["tag:phone-claude-vps"],
+      "ip": ["tcp:22"]
     }
   ],
   "ssh": [
@@ -49,6 +54,8 @@ tailscale ip -4   # the VM's tailnet IP
 ```
 
 `tag:ci` is the tag `.github/workflows/deploy-vps.yml` advertises when it joins the tailnet via a Tailscale OAuth client scoped to `auth_keys` and that tag; add the tag to `tagOwners` alongside `tag:phone-claude-vps`. Store the client's ID and secret as `TAILSCALE_OAUTH_CLIENT_ID`/`TAILSCALE_OAUTH_CLIENT_SECRET` in the Phone Claude 1Password Environment.
+
+The `ssh` section alone isn't enough for `tag:ci`: without a matching `grants` (or legacy `acls`) entry, the node can't even resolve `phone-claude-vps.tail8e5593.ts.net` — the `ssh` rule only governs access once a connection reaches the host, while `grants`/`acls` governs whether the node can see and reach it at all. A deploy failing with `ssh: Could not resolve hostname` points at this.
 
 ## Firewall
 
