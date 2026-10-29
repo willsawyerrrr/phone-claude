@@ -34,7 +34,7 @@ tailscale ip -4   # the VM's tailnet IP
   "ssh": [
     {
       "action": "accept",
-      "src": ["wmsawyer2609@gmail.com"],
+      "src": ["autogroup:member"],
       "dst": ["tag:phone-claude-vps"],
       "users": ["root", "autogroup:nonroot"]
     }
