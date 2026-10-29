@@ -13,8 +13,8 @@ Claude Code ──ask_by_phone──▶ mcp-server                        ▲   
                                   └── POST /ari/channels ────▶ Asterisk ──SIP──▶ your phone
 ```
 
-- **`mcp-server/`** — an MCP server run locally by Claude Code (stdio transport). Exposes one tool, `ask_by_phone`, which registers the question with the voice pipeline, has Asterisk originate the call over ARI, and polls the pipeline for the answer.
-- **Local stack** — Asterisk (SIP) and the voice pipeline (speaks the question, captures the spoken reply), run as a Docker Compose stack. Your phone rings through a SIP soft-phone registered to Asterisk. See [`local/README.md`](local/README.md) for running the stack, or [`docs/cloud-deploy.md`](docs/cloud-deploy.md) to run it on a cloud VM that `mcp-server` reaches over Tailscale.
+- **`mcp-server/`** — an MCP server exposing one tool, `ask_by_phone`, which registers the question with the voice pipeline, has Asterisk originate the call over ARI, and polls the pipeline for the answer. Run locally by Claude Code (stdio transport), or deployed alongside the stack and reached over Streamable HTTP instead — see [`docs/cloud-deploy.md`](docs/cloud-deploy.md).
+- **Local stack** — Asterisk (SIP) and the voice pipeline (speaks the question, captures the spoken reply), run as a Docker Compose stack. Your phone rings through a SIP soft-phone registered to Asterisk. See [`local/README.md`](local/README.md) for running the stack, or [`docs/cloud-deploy.md`](docs/cloud-deploy.md) to run it on a cloud VM instead.
 - **`ios/`** — a SwiftUI SIP soft-phone for iOS that registers to Asterisk and answers the call. It rings from the lock screen through CallKit, woken by a VoIP push. See [`ios/README.md`](ios/README.md).
 
 ## Setup

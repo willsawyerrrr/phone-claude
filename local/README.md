@@ -8,6 +8,7 @@ Services:
 - **`asterisk` with `PUBLIC_HOSTNAME` set** — SIP is TLS-only on `TLS_PORT` (5061) and calls require SDES SRTP, so the SIP password and audio are encrypted; the plain UDP/TCP transports are off. See [Encrypted calls](#encrypted-calls).
 - **`caddy`** (optional, `public` profile) — terminates HTTPS for `PUBLIC_HOSTNAME` with an automatic Let's Encrypt certificate and proxies only `PUT /device` to `voice-pipeline:8081`; every other path is `404`.
 - **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, on `PIPELINE_BIND_ADDRESS`, loopback by default) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
+- **`mcp-server`** — the MCP server itself, over Streamable HTTP (`:8090`, on `MCP_BIND_ADDRESS`, loopback by default), for a Claude Code instance that isn't running it locally. Reaches `asterisk`/`voice-pipeline` by their Compose service names. See [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
 
 The AudioSocket connection is made only once the phone answers.
 
@@ -27,7 +28,7 @@ The Environment holds the variables listed in `.env.example`; only `SOFTPHONE_PA
 
 `./test-up.sh` tests the detection against stubbed `route` and `ipconfig`.
 
-Published ports: SIP `SIP_PORT` (UDP and TCP) and `TLS_PORT` (TCP, TLS), RTP `RTP_START`–`RTP_END` (UDP, 1:1), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, and the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS` (both loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on. To run the stack on a cloud VM instead, see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
+Published ports: SIP `SIP_PORT` (UDP and TCP) and `TLS_PORT` (TCP, TLS), RTP `RTP_START`–`RTP_END` (UDP, 1:1), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS`, and `mcp-server`'s `MCP_PORT` on `MCP_BIND_ADDRESS` (all three loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on. To run the stack on a cloud VM instead, see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
 
 `LOCAL_NET` lists the networks Asterisk treats as local (loopback by default). Docker presents LAN peers from a gateway address in a private Docker range (`192.168.65.1` or a `172.x` address on Docker Desktop for macOS), so no private range may be listed, or the phone is given the container's internal address in SIP. The soft-phone endpoint's `media_address` is `HOST_LAN_IP`, so SDP always advertises the host for RTP.
 

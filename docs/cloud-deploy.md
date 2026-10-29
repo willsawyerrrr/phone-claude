@@ -1,6 +1,6 @@
 # Cloud deploy
 
-Runs the `local/` stack on one cloud VM for one phone, using DigitalOcean in Sydney (`syd1`) as the example. SIP (TLS), RTP and the HTTPS device endpoint are public; ARI (`8088`) and the pipeline API (`8080`) are reachable only over Tailscale, from the Mac running `mcp-server`.
+Runs the `local/` stack on one cloud VM for one phone, using DigitalOcean in Sydney (`syd1`) as the example. SIP (TLS), RTP and the HTTPS device endpoint are public; ARI (`8088`), the pipeline API (`8080`) and `mcp-server` (`8090`) are reachable only over Tailscale. `mcp-server` itself runs on the VM, next to Asterisk and the voice pipeline (reaching them over the Compose network, not Tailscale); Claude Code connects to it remotely instead of running it locally.
 
 ## VM
 
@@ -20,7 +20,7 @@ tailscale ip -4   # the VM's tailnet IP
 ```
 
 - Create the auth key in the Tailscale admin console with tag `tag:phone-claude-vps` (add the tag to `tagOwners`).
-- The tailnet is `tail8e5593.ts.net`. ACL granting only the Mac user access to the two ports:
+- The tailnet is `tail8e5593.ts.net`. ACL granting only the Mac user access to the three ports:
 
 ```json
 {
@@ -28,7 +28,7 @@ tailscale ip -4   # the VM's tailnet IP
     {
       "action": "accept",
       "src": ["wmsawyer2609@gmail.com"],
-      "dst": ["tag:phone-claude-vps:8080,8088"]
+      "dst": ["tag:phone-claude-vps:8080,8088,8090"]
     }
   ],
   "ssh": [
@@ -61,7 +61,7 @@ DigitalOcean Cloud Firewall attached to the droplet, inbound only:
 | UDP      | 10000-10100 | RTP (`RTP_START`-`RTP_END`) |
 | TCP      | 443         | Device endpoint over HTTPS  |
 
-Do not open `22`, `8080`, `8081` or `8088`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI and the pipeline to the tailnet IP as below.
+Do not open `22`, `8080`, `8081`, `8088` or `8090`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI, the pipeline and `mcp-server` to the tailnet IP as below.
 
 ## Stack
 
@@ -78,6 +78,7 @@ SOFTPHONE_PASSWORD=<long random>
 ARI_PASSWORD=<long random>
 ARI_BIND_ADDRESS=<tailnet IP>
 PIPELINE_BIND_ADDRESS=<tailnet IP>
+MCP_BIND_ADDRESS=<tailnet IP>
 DEVICE_BIND_ADDRESS=127.0.0.1
 COMPOSE_PROFILES=public
 PUBLIC_HOSTNAME=phone-claude.willsawyerrrr.dev
@@ -100,14 +101,12 @@ Running this from a script with no login shell (e.g. a cloud-init `user_data` sc
 
 Create the `PUBLIC_HOSTNAME` `A` record before starting; `caddy` obtains its Let's Encrypt certificate on first start (see [`local/README.md`](../local/README.md#public-https-cloud-host)). In the phone app, use TLS mode with host `phone-claude.willsawyerrrr.dev` and SIP port `5061`; the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
 
-## Mac
+## Claude Code
 
-Point `mcp-server` at the VM's tailnet name:
+`mcp-server` runs on the VM as part of the stack (see [`local/README.md`](../local/README.md)), so Claude Code reaches it over HTTP instead of launching it locally. Register it as a remote MCP server at user scope, alongside (or instead of) the project's local stdio entry in `.mcp.json`:
 
 ```sh
-export ARI_URL=http://<tailnet name>:8088
-export PIPELINE_URL=http://<tailnet name>:8080
-export ARI_USERNAME=phone-claude ARI_PASSWORD=<ARI_PASSWORD>
+claude mcp add --scope user --transport http phone-claude-cloud http://<tailnet name>:8090/mcp
 ```
 
-`SIP_ENDPOINT` must equal `SOFTPHONE_USERNAME`.
+Use a different name from the project's own `phone-claude` entry if both are ever registered at once.

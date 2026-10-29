@@ -4,9 +4,14 @@
 
 pnpm workspace with one package:
 
-- `mcp-server/` — standalone MCP server (stdio transport) run locally by
-  Claude Code. Exposes one tool, `ask_by_phone`, backed by the local
-  Asterisk + voice-pipeline stack. The root `bin/phone-claude-mcp-server.js`
+- `mcp-server/` — standalone MCP server. Exposes one tool, `ask_by_phone`,
+  backed by the Asterisk + voice-pipeline stack. `src/server.ts` registers
+  the tool and the `SIGINT`/`SIGTERM` shutdown handling shared by its two
+  entrypoints: `src/index.ts` (stdio transport, run locally by Claude Code)
+  and `src/http.ts` (Streamable HTTP, stateless — one `McpServer` per
+  request, since `ask_by_phone` has no use for session resumability; built
+  and run from `mcp-server/Dockerfile`, as the `mcp-server` Compose service,
+  for the cloud-deploy stack). The root `bin/phone-claude-mcp-server.js`
   shim (builds `mcp-server` when `dist` is missing or stale, build output on
   stderr, then imports `dist/index.js`) is what the root `.mcp.json` and the
   root `bin` entry launch; `mcp-server/src/shim.test.ts` exercises it.
@@ -40,11 +45,11 @@ with local Kyutai Pocket TTS (`alba-casual` by default; `TTS_VOICE` selects
 API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. `ARI_BIND_ADDRESS` and
 `PIPELINE_BIND_ADDRESS` (both loopback by default) set the addresses of the
-ARI and pipeline API ports. Setting `CAPTURE_DIR` records each listening phase's inbound audio and speech detection under `local/captures/` for
+ARI and pipeline API ports; `MCP_BIND_ADDRESS` (also loopback by default) sets `mcp-server`'s. Setting `CAPTURE_DIR` records each listening phase's inbound audio and speech detection under `local/captures/` for
 tuning with `local/voice-pipeline/scripts/analyze_capture.py` (off by default; it is the caller's room audio). Speech more than `LOUDNESS_MARGIN_DB` (12) quieter than the loudest in a reply counts as background and doesn't hold the reply open. The same stack runs on a single cloud VM
-(`docs/cloud-deploy.md`): `HOST_LAN_IP` is the VM's public IP, those two ports
-bind to its Tailscale IP, and `mcp-server` on the Mac reaches them over the
-tailnet. With `PUBLIC_HOSTNAME` set, `asterisk` instead serves SIP over TLS on
+(`docs/cloud-deploy.md`): `HOST_LAN_IP` is the VM's public IP, those three ports
+bind to its Tailscale IP, and Claude Code reaches `mcp-server` over the
+tailnet instead of running it locally. With `PUBLIC_HOSTNAME` set, `asterisk` instead serves SIP over TLS on
 `TLS_PORT` (5061) with Caddy's certificate (read from the `caddy-data` volume by
 `local/asterisk/start.sh`, which waits for it, copies it readable by `asterisk`
 and restarts Asterisk on renewal) and the endpoint requires SDES SRTP; plain
@@ -68,6 +73,8 @@ device endpoint. See `ios/README.md`.
   `pnpm format:check`. CI and the MCP server on the user's machine run Node 26
   (`.nvmrc`, `engines` `26.x`, `@types/node` `^26`); Dependabot ignores
   `@types/node` major bumps.
+- `mcp-server/Dockerfile` (built from the repo root, a pnpm workspace):
+  `docker build -f mcp-server/Dockerfile -t mcp-server-test .`.
 - Voice pipeline (`ruff` + `pytest`; Python 3.14 in the Docker image,
   `requires-python` and `.python-version`; Dependabot ignores Python major and
   minor bumps of the base image):
