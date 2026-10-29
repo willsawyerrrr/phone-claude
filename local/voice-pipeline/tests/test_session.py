@@ -47,6 +47,35 @@ async def test_captures_reply_after_quiet_period(settings):
     assert channel.hung_up and channel.closed
 
 
+async def test_a_warmed_first_segment_is_spoken_without_resynthesizing(settings):
+    channel = FakeChannel(talk(0.4) + quiet(1.0))
+    stt = FakeStt("yes ship it")
+    store = CallStore(ttl_s=60)
+    record = store.register(CALL_ID, "Ship it?", None)
+    tts = FakeTts()
+
+    async def already_rendered() -> bytes:
+        return b"\x09" * FRAME_BYTES
+
+    warm = asyncio.create_task(already_rendered())
+    session = CallSession(
+        record,
+        channel,
+        FakeVad(),
+        stt,
+        tts,
+        store,
+        settings,
+        no_pace,
+        warm_first_segment=warm,
+    )
+
+    await session.run()
+
+    assert tts.spoken == ["Got it, thanks. Goodbye."]
+    assert channel.speech_frames[0] == b"\x09" * FRAME_BYTES
+
+
 async def test_speaks_context_before_question(settings):
     channel = FakeChannel(talk(0.2) + quiet(1.0))
     session, _, tts = make_session(

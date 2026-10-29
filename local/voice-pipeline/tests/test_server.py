@@ -142,6 +142,26 @@ async def test_registering_a_call_returns_it_pending(http):
     assert await status.json() == {"callId": CALL_ID, "status": "pending"}
 
 
+async def test_registering_a_call_synthesizes_the_first_segment_while_it_rings(
+    http, pipeline
+):
+    await register(http)
+
+    await asyncio.wait_for(pipeline._warm_first_segments[CALL_ID], 2)
+
+    assert pipeline._tts.spoken == ["Ship it?"]
+
+
+async def test_cancelling_before_connecting_cleans_up_its_warm_synthesis(
+    http, pipeline
+):
+    await register(http)
+
+    await http.post(f"/calls/{CALL_ID}/cancel")
+
+    assert CALL_ID not in pipeline._warm_first_segments
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -168,11 +188,12 @@ async def test_unknown_calls_are_not_found(http):
     assert (await http.post(f"/calls/{CALL_ID}/cancel")).status == 404
 
 
-async def test_a_call_is_answered_end_to_end(http, audiosocket_port):
+async def test_a_call_is_answered_end_to_end(http, audiosocket_port, pipeline):
     await register(http)
     asterisk = await FakeAsterisk.connect(audiosocket_port)
 
     await asterisk.wait_for_prompt_to_finish()
+    assert CALL_ID not in pipeline._warm_first_segments
     await asterisk.send_audio(talk(0.4) + quiet(1.0))
     audio = await asterisk.read_until_hangup()
 

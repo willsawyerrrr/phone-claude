@@ -44,6 +44,14 @@ REPEAT_PATTERN = re.compile(
 Pace = Callable[[float], Awaitable[None]]
 
 
+def synthesize_segment(
+    segment: Segment, tts: Speaker, voices: Callable[[str], Speaker] | None
+) -> bytes:
+    if segment.voice is None or voices is None:
+        return tts.synthesize(segment.text)
+    return voices(segment.voice).synthesize(segment.text)
+
+
 class _RealtimePacer:
     """Sleeps to a fixed schedule, so per-frame overhead doesn't accumulate
     into audio underruns."""
@@ -88,6 +96,7 @@ class CallSession:
         settings: Settings,
         pace: Pace | None = None,
         voices: Callable[[str], Speaker] | None = None,
+        warm_first_segment: asyncio.Task[bytes] | None = None,
     ) -> None:
         self._record = record
         self._channel = channel
@@ -98,6 +107,7 @@ class CallSession:
         self._store = store
         self._settings = settings
         self._pace = pace or _RealtimePacer()
+        self._warm = warm_first_segment
         self._inbox: asyncio.Queue[bytes | None] = asyncio.Queue()
         self._outbound = bytearray()
         self._outbound_flushed = asyncio.Event()
@@ -179,7 +189,11 @@ class CallSession:
 
     async def _speak(self, script: tuple[Segment, ...]) -> None:
         for segment in script:
-            pcm = await asyncio.to_thread(self._synthesize, segment)
+            if self._warm is not None:
+                warm, self._warm = self._warm, None
+                pcm = await warm
+            else:
+                pcm = await asyncio.to_thread(self._synthesize, segment)
             if self._hung_up.is_set():
                 return
             self._outbound_flushed.clear()
@@ -187,9 +201,7 @@ class CallSession:
             await self._outbound_flushed.wait()
 
     def _synthesize(self, segment: Segment) -> bytes:
-        if segment.voice is None or self._voices is None:
-            return self._tts.synthesize(segment.text)
-        return self._voices(segment.voice).synthesize(segment.text)
+        return synthesize_segment(segment, self._tts, self._voices)
 
     async def _stream_outbound(self) -> None:
         """Sends one frame per tick: queued speech, else silence."""
