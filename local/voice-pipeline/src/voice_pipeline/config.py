@@ -13,6 +13,12 @@ DEFAULT_VOICE = "alba-casual"
 class Settings:
     audiosocket_port: int = 9092
     http_port: int = 8080
+    # Silence held before the first prompt, so the opening word isn't clipped
+    # by the moment it takes the caller's media path (and the caller
+    # themselves) to settle right after answering. The opening segment is
+    # pre-synthesized, so it otherwise has no synthesis delay of its own to
+    # cover for this.
+    answer_settle_s: float = 0.3
     # How long to wait for the caller to say anything at all after a prompt.
     no_input_timeout_s: float = 15.0
     # Silence after speech that marks the caller's reply as complete.
@@ -49,6 +55,7 @@ class Settings:
         return cls(
             audiosocket_port=int(env("AUDIOSOCKET_PORT", d.audiosocket_port)),
             http_port=int(env("HTTP_PORT", d.http_port)),
+            answer_settle_s=float(env("ANSWER_SETTLE_S", d.answer_settle_s)),
             no_input_timeout_s=float(env("NO_INPUT_TIMEOUT_S", d.no_input_timeout_s)),
             quiet_period_s=float(env("QUIET_PERIOD_S", d.quiet_period_s)),
             max_reply_s=float(env("MAX_REPLY_S", d.max_reply_s)),
