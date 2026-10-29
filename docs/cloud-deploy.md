@@ -74,7 +74,8 @@ DEVICE_BIND_ADDRESS=127.0.0.1
 COMPOSE_PROFILES=public
 PUBLIC_HOSTNAME=phone-claude.willsawyerrrr.dev
 LOCAL_NET=127.0.0.0/8
-# APNS_* as in local/README.md; copy the .p8 key to ~/.config/phone-claude/apns_key.p8 on the VM
+# APNS_* as in local/README.md; copy the .p8 key to ~/.config/phone-claude/apns_key.p8 on
+# the VM and chmod 644 it, so the container's non-root `pipeline` user can read the secret
 ```
 
 Start it with the reserved IP as `HOST_LAN_IP`:
