@@ -109,9 +109,11 @@ docker run --rm voice-pipeline-test`.
   using `TAILSCALE_OAUTH_CLIENT_ID`/`TAILSCALE_OAUTH_CLIENT_SECRET` from the
   Phone Claude Environment), then SSHes to `phone-claude-vps` (the repository
   variables `VPS_TAILNET_HOST` and `VPS_RESERVED_IP`), resets it to
-  `origin/main`, and re-runs `./up.sh`. The tailnet ACL's `ssh` rule must
-  grant `tag:ci` root access to `tag:phone-claude-vps`. Rebuilding briefly
-  interrupts any in-progress call; it is not part of `CI Status`.
+  `origin/main`, and re-runs `./up.sh`. The tailnet policy needs both a
+  `grants` entry (not just the `ssh` section — see `docs/cloud-deploy.md`)
+  granting `tag:ci` access to `tag:phone-claude-vps`, and the `ssh` rule
+  granting it root. Rebuilding briefly interrupts any in-progress call; it is
+  not part of `CI Status`.
 
 ## Local call round-trip
 
