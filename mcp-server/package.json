@@ -3,13 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "bin": {
-    "phone-claude-mcp-server": "./dist/index.js"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "tsx src/index.ts",
-    "dev:http": "tsx src/http.ts",
+    "dev": "tsx src/http.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "audition": "tsx src/audition.ts",

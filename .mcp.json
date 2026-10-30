@@ -1,16 +1,8 @@
 {
   "mcpServers": {
     "phone-claude": {
-      "command": "op",
-      "args": [
-        "run",
-        "--environment",
-        "${OP_ENVIRONMENT_ID}",
-        "--no-masking",
-        "--",
-        "node",
-        "bin/phone-claude-mcp-server.js"
-      ]
+      "type": "http",
+      "url": "http://mcp.phone-claude.willsawyerrrr.dev/mcp"
     }
   }
 }

@@ -6,24 +6,19 @@ pnpm workspace with one package:
 
 - `mcp-server/` — standalone MCP server. Exposes one tool, `ask_by_phone`,
   backed by the Asterisk + voice-pipeline stack. `src/server.ts` registers
-  the tool and the `SIGINT`/`SIGTERM` shutdown handling shared by its two
-  entrypoints: `src/index.ts` (stdio transport, run locally by Claude Code)
-  and `src/http.ts` (Streamable HTTP, stateless — one `McpServer` per
-  request, since `ask_by_phone` has no use for session resumability; built
-  and run from `mcp-server/Dockerfile`, as the `mcp-server` Compose service,
-  for the cloud-deploy stack). The root `bin/phone-claude-mcp-server.js`
-  shim (builds `mcp-server` when `dist` is missing or stale, build output on
-  stderr, then imports `dist/index.js`) is what the root `.mcp.json` and the
-  root `bin` entry launch; `mcp-server/src/shim.test.ts` exercises it.
+  the tool and the `SIGINT`/`SIGTERM` shutdown handling used by its one
+  entrypoint, `src/http.ts` (Streamable HTTP, stateless — one `McpServer`
+  per request, since `ask_by_phone` has no use for session resumability),
+  built and run from `mcp-server/Dockerfile` as the `mcp-server` Compose
+  service. The root `.mcp.json` registers it directly as a remote HTTP MCP
+  server (`http://mcp.phone-claude.willsawyerrrr.dev/mcp`, reached over
+  Tailscale) — there is no local launch.
 
-`local/` is that stack's Docker Compose definition (not a pnpm package). Start
-it with `local/up.sh`, which detects the Mac's LAN IP and exports it as
-`HOST_LAN_IP` (it overrides the Environment and `.env`); with `OP_ENVIRONMENT_ID`
-set it runs Compose under `op run --environment`, and a host with no 1Password
-(the cloud VM) leaves it unset and uses `.env`. `.mcp.json` launches the shim
-through `op run --environment "${OP_ENVIRONMENT_ID}" --no-masking` (stdout
-carries MCP traffic), so secrets come from the 1Password Environment, not a
-`.env` file. `local/test-up.sh` tests the detection. The
+`local/` is that stack's Docker Compose definition (not a pnpm package),
+deployed to the cloud VM (`docs/cloud-deploy.md`) — it is not run anywhere
+else. Start it with `local/up.sh` (`HOST_LAN_IP=<reserved IP> ./up.sh`),
+which just runs Compose; the VM has no 1Password, so configuration comes
+from `.env`. The
 `asterisk` service renders its config from env at container start
 (`local/asterisk/render-config.sh`), so it runs unchanged on any host. It has
 one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
@@ -35,9 +30,9 @@ prefers G.722 (falling back to `ulaw,alaw`; `mcp-server` passes
 `formats=g722,ulaw,alaw` to ARI so the offer leads with it) and the pipeline
 works in 16 kHz slin. The
 `voice-pipeline` service (`local/voice-pipeline/`, Python) also stores the
-phone's push token (`PUT /device` on the LAN port `DEVICE_PORT`, or over HTTPS at
-`PUBLIC_HOSTNAME` through the optional `caddy` service, enabled by
-`COMPOSE_PROFILES=public`; bearer
+phone's push token (`PUT /device`, reachable over HTTPS at
+`PUBLIC_HOSTNAME` through the `caddy` service (`COMPOSE_PROFILES=public`,
+always set — see `docs/cloud-deploy.md`); bearer
 `SOFTPHONE_PASSWORD`, persisted in the `pipeline-data` volume) and sends the
 APNs VoIP push (`POST /push`, loopback). It speaks the question
 with local Kyutai Pocket TTS (`alba-casual` by default; `TTS_VOICE` selects
@@ -46,14 +41,17 @@ API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. `ARI_BIND_ADDRESS` and
 `PIPELINE_BIND_ADDRESS` (both loopback by default) set the addresses of the
 ARI and pipeline API ports; `MCP_BIND_ADDRESS` (also loopback by default) sets `mcp-server`'s. Setting `CAPTURE_DIR` records each listening phase's inbound audio and speech detection under `local/captures/` for
-tuning with `local/voice-pipeline/scripts/analyze_capture.py` (off by default; it is the caller's room audio). Speech more than `LOUDNESS_MARGIN_DB` (12) quieter than the loudest in a reply counts as background and doesn't hold the reply open. The same stack runs on a single cloud VM
-(`docs/cloud-deploy.md`): `HOST_LAN_IP` is the VM's public IP, those three ports
-bind to its Tailscale IP, and Claude Code reaches `mcp-server` over the
-tailnet instead of running it locally. With `PUBLIC_HOSTNAME` set, `asterisk` instead serves SIP over TLS on
+tuning with `local/voice-pipeline/scripts/analyze_capture.py` (off by default; it is the caller's room audio). Speech more than `LOUDNESS_MARGIN_DB` (12) quieter than the loudest in a reply counts as background and doesn't hold the reply open. On the VM
+(`docs/cloud-deploy.md`), `HOST_LAN_IP` is its public IP, `ARI_BIND_ADDRESS`/
+`PIPELINE_BIND_ADDRESS`/`MCP_BIND_ADDRESS` bind to its Tailscale IP, and
+Claude Code reaches `mcp-server` over the tailnet. With `PUBLIC_HOSTNAME`
+set, `asterisk` serves SIP over TLS on
 `TLS_PORT` (5061) with Caddy's certificate (read from the `caddy-data` volume by
 `local/asterisk/start.sh`, which waits for it, copies it readable by `asterisk`
-and restarts Asterisk on renewal) and the endpoint requires SDES SRTP; plain
-SIP and RTP are served only when it is unset. See `local/README.md` and `local/voice-pipeline/README.md`.
+and restarts Asterisk on renewal) and the endpoint requires SDES SRTP;
+`render-config.sh` also has a plain-SIP branch for when it's unset, unused
+in practice since the VM always sets it. See
+`local/README.md` and `local/voice-pipeline/README.md`.
 
 `ios/` is a SwiftUI soft-phone (not a pnpm package; the Xcode project is
 generated from `ios/project.yml` with XcodeGen) that registers to `asterisk`
@@ -70,7 +68,7 @@ device endpoint. See `ios/README.md`.
 ## Build and test
 
 - TypeScript: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`,
-  `pnpm format:check`. CI and the MCP server on the user's machine run Node 26
+  `pnpm format:check`. CI and `mcp-server`'s Docker image run Node 26
   (`.nvmrc`, `engines` `26.x`, `@types/node` `^26`); Dependabot ignores
   `@types/node` major bumps.
 - `mcp-server/Dockerfile` (built from the repo root, a pnpm workspace):
@@ -80,7 +78,7 @@ device endpoint. See `ios/README.md`.
   minor bumps of the base image):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.
-- Stack start script: `shellcheck local/up.sh local/test-up.sh local/audition.sh local/test-render-config.sh && local/test-up.sh && local/test-render-config.sh`.
+- Stack scripts: `shellcheck local/up.sh local/audition.sh local/test-render-config.sh && local/test-render-config.sh`.
 - iOS (CI and the TestFlight deploy both pin `macos-26` and Xcode 26.6, the
   newest GA Xcode on GitHub's runners): in `ios/`, `xcodegen generate`, then
   `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude
@@ -123,7 +121,7 @@ docker run --rm voice-pipeline-test`.
   `deploy-vps.yml` does — one OAuth client, scoped to both `auth_keys` and
   `policy_file`, backs both workflows. It is not part of `CI Status`.
 
-## Local call round-trip
+## Call round-trip
 
 1. Claude Code calls the `ask_by_phone` MCP tool with a question (and
    optional context).

@@ -143,9 +143,10 @@ async function endpointIsOnline(config: Config): Promise<boolean> {
 
 /**
  * Polls for the call outcome rather than holding a long-lived connection —
- * calls take minutes and the MCP stdio transport has no server-push
- * mechanism, so a short interval poll is the simplest way to wait without
- * blocking the process on an open socket.
+ * calls take minutes, and `ask_by_phone`'s tool call is a single
+ * request/response with no server-push mechanism to wait on, so a short
+ * interval poll is the simplest way to wait without blocking on an open
+ * socket.
  *
  * Nothing tells the pipeline when the dial itself fails (busy, declined,
  * unreachable), so its record stays `pending`. While `pending`, each poll
