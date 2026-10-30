@@ -9,14 +9,8 @@
 #                                             blind, then print which was which
 #
 # `call` needs the stack up (`./up.sh`) and `pnpm install` run at the repo root.
-# With `OP_ENVIRONMENT_ID` set, runs under `op run --environment`; otherwise
-# `call` reads `.env`.
 set -eu
 cd "$(dirname "$0")"
-
-if [ -n "${OP_ENVIRONMENT_ID:-}" ] && [ -z "${AUDITION_ENV_LOADED:-}" ]; then
-  AUDITION_ENV_LOADED=1 exec op run --environment "$OP_ENVIRONMENT_ID" -- "$0" "$@"
-fi
 
 case "${1:-}" in
   render)
@@ -27,12 +21,10 @@ case "${1:-}" in
     ;;
   call)
     shift
-    if [ -z "${OP_ENVIRONMENT_ID:-}" ]; then
-      set -a
-      # shellcheck source=/dev/null
-      . ./.env
-      set +a
-    fi
+    set -a
+    # shellcheck source=/dev/null
+    . ./.env
+    set +a
     exec pnpm --dir ../mcp-server audition "$@"
     ;;
   *)

@@ -73,8 +73,8 @@ Set `CAPTURE_DIR` (in the Environment; a host path such as `./captures`, relativ
 `scripts/analyze_capture.py` replays a WAV through candidate speech-detection policies (thresholds, hysteresis, minimum speech duration, smoothing, an energy gate) and prints when each would end the reply and what Whisper hears in the audio it would send. From `local/`:
 
 ```sh
-op run --environment "$OP_ENVIRONMENT_ID" -- \
-  docker compose run --rm --no-deps -v ./voice-pipeline/scripts:/scripts -v ./captures:/captures \
+set -a; . ./.env; set +a
+docker compose run --rm --no-deps -v ./voice-pipeline/scripts:/scripts -v ./captures:/captures \
   voice-pipeline python /scripts/analyze_capture.py /captures/<call id>-1.wav
 ```
 

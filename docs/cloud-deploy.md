@@ -42,7 +42,7 @@ Do not open `22`, `80`, `8080`, `8081` or `8088`; SSH goes through Tailscale (`s
 
 ## Stack
 
-The VM has no 1Password, so it keeps its configuration in `.env` (leave `OP_ENVIRONMENT_ID` unset). Clone the repo on the VM, then in `local/`:
+The VM has no 1Password, so it keeps its configuration in `.env`. Clone the repo on the VM, then in `local/`:
 
 ```sh
 cp .env.example .env
@@ -70,20 +70,18 @@ Start it with the reserved IP as `HOST_LAN_IP`:
 HOST_LAN_IP=<reserved IP> ./up.sh
 ```
 
-The override skips `up.sh`'s macOS `route`/`ipconfig` detection, so it works on Linux. Re-run it with the same value to apply `.env` changes. Start Tailscale first so the tailnet IP exists to bind to.
+Re-run it with the same value to apply `.env` changes. Start Tailscale first so the tailnet IP exists to bind to.
 
 Running this from a script with no login shell (e.g. a cloud-init `user_data` script) leaves `HOME` unset, so Compose resolves the `apns_key` secret's `${HOME}/.config/phone-claude/apns_key.p8` to the wrong path and the `voice-pipeline` container fails to start. Export `HOME=/root` (or the invoking user's home) before calling `up.sh` in that case.
 
 `LOCAL_NET` stays loopback only. On a public host every peer is non-local, so Asterisk gives the phone `HOST_LAN_IP` in SIP and SDP; listing a private range would hand it a container address.
 
-Create the `PUBLIC_HOSTNAME` `A` record before starting; `caddy` obtains its Let's Encrypt certificate on first start (see [`local/README.md`](../local/README.md#public-https-cloud-host)). In the phone app, use TLS mode with host `phone-claude.willsawyerrrr.dev` and SIP port `5061`; the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
+Create the `PUBLIC_HOSTNAME` `A` record before starting; `caddy` obtains its Let's Encrypt certificate on first start (see [`local/README.md`](../local/README.md#encrypted-calls)). In the phone app, use TLS mode with host `phone-claude.willsawyerrrr.dev` and SIP port `5061`; the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
 
 ## Claude Code
 
-`mcp-server` runs on the VM as part of the stack (see [`local/README.md`](../local/README.md)), so Claude Code reaches it over HTTP instead of launching it locally. Register it as a remote MCP server at user scope, alongside (or instead of) the project's local stdio entry in `.mcp.json`:
+`mcp-server` runs on the VM as part of the stack (see [`local/README.md`](../local/README.md)), reached over Tailscale. The repo's `.mcp.json` already registers it (`http://mcp.phone-claude.willsawyerrrr.dev/mcp`), so any Claude Code session started in this checkout just works once you're on the tailnet — no setup step. To use it from outside this checkout, register it at user scope instead:
 
 ```sh
 claude mcp add --scope user --transport http phone-claude-cloud http://mcp.phone-claude.willsawyerrrr.dev/mcp
 ```
-
-Use a different name from the project's own `phone-claude` entry if both are ever registered at once.

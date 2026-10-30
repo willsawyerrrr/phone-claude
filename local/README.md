@@ -1,52 +1,39 @@
-# Local voice stack
+# Voice stack
 
-A Docker Compose stack that rings a SIP soft-phone on the local network, with no carrier involved. It runs on any machine with Docker; everything host-specific comes from the 1Password Environment (or `.env` on a host with no 1Password) or, for `HOST_LAN_IP`, `up.sh`.
+A Docker Compose stack that rings a SIP soft-phone over cellular, with no
+local network involved — it runs on a cloud VM (see
+[`../docs/cloud-deploy.md`](../docs/cloud-deploy.md)). Everything
+host-specific comes from `.env`, and `HOST_LAN_IP` is the VM's public
+(reserved) IP.
 
 Services:
 
-- **`asterisk`** — the PBX. One PJSIP endpoint (the soft-phone, offering G.722 first, then `ulaw,alaw`), ARI on port 8088, and an `ask-by-phone` dialplan context. An ARI-originated call rings the soft-phone; once answered, extension `700` streams the call's audio over AudioSocket (16 kHz `slin16`) to `voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. `CALL_ID` must be a UUID, and is the connection's ID verbatim.
-- **`asterisk` with `PUBLIC_HOSTNAME` set** — SIP is TLS-only on `TLS_PORT` (5061) and calls require SDES SRTP, so the SIP password and audio are encrypted; the plain UDP/TCP transports are off. See [Encrypted calls](#encrypted-calls).
-- **`caddy`** (optional, `public` profile) — terminates HTTPS for `PUBLIC_HOSTNAME` with an automatic Let's Encrypt certificate and proxies only `PUT /device` to `voice-pipeline:8081`; every other path is `404`.
+- **`asterisk`** — the PBX. One PJSIP endpoint (the soft-phone, offering G.722 first, then `ulaw,alaw`), ARI on port 8088, and an `ask-by-phone` dialplan context. An ARI-originated call rings the soft-phone; once answered, extension `700` streams the call's audio over AudioSocket (16 kHz `slin16`) to `voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. `CALL_ID` must be a UUID, and is the connection's ID verbatim. SIP is TLS-only on `TLS_PORT` (5061) and calls require SDES SRTP, so the SIP password and audio are encrypted. See [Encrypted calls](#encrypted-calls).
+- **`caddy`** — terminates HTTPS for `PUBLIC_HOSTNAME` with an automatic Let's Encrypt certificate and proxies only `PUT /device` to `voice-pipeline:8081`; every other path is `404`.
 - **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, on `PIPELINE_BIND_ADDRESS`, loopback by default) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
-- **`mcp-server`** — the MCP server itself, over Streamable HTTP (`:80`, on `MCP_BIND_ADDRESS`, loopback by default), for a Claude Code instance that isn't running it locally. Reaches `asterisk`/`voice-pipeline` by their Compose service names. See [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
+- **`mcp-server`** — the MCP server itself, over Streamable HTTP (`:80`, on `MCP_BIND_ADDRESS`, loopback by default), that Claude Code connects to remotely over Tailscale. Reaches `asterisk`/`voice-pipeline` by their Compose service names. See [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
 
 The AudioSocket connection is made only once the phone answers.
 
 ## Setup
 
 ```sh
-export OP_ENVIRONMENT_ID=<environment id>   # holds SOFTPHONE_PASSWORD, ARI_PASSWORD
-./up.sh                # the first build downloads the speech models (~2.8 GB image)
-docker compose ps      # asterisk and voice-pipeline should report "healthy"
+cp .env.example .env   # fill in SOFTPHONE_PASSWORD, ARI_PASSWORD, PUBLIC_HOSTNAME, ...
+HOST_LAN_IP=<reserved IP> ./up.sh   # the first build downloads the speech models (~2.8 GB image)
+docker compose ps                  # asterisk and voice-pipeline should report "healthy"
 ```
 
-`up.sh` detects this machine's current LAN IPv4 (the default-route interface, else `en0`/`en1`; never a tunnel, VPN or Docker interface), prints it, exports it as `HOST_LAN_IP`, and runs `docker compose up -d --build "$@"`. Re-run it after the IP changes: Compose recreates the containers whose configuration changed. `./up.sh --print` only prints the IP. `HOST_LAN_IP=<ip> ./up.sh` overrides detection (skipping the macOS-only `route`/`ipconfig` calls, so it works on Linux); without it, `up.sh` fails if no IP is found.
+`HOST_LAN_IP` must be set — it's the VM's public address as the phone reaches it; Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this host. `up.sh` just runs `docker compose up -d --build`; re-run it after `.env` or `HOST_LAN_IP` changes (Compose recreates the containers whose configuration changed).
 
-`HOST_LAN_IP` is this machine's LAN address as the phone reaches it. Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this machine, and the device-registration port (`DEVICE_PORT`) is published on it. An exported `HOST_LAN_IP` takes precedence over `.env`, so leave it out of `.env`; a bare `docker compose` command reads only `.env` and fails without it.
+The variables are listed in `.env.example`; only `SOFTPHONE_PASSWORD`, `ARI_PASSWORD` and `PUBLIC_HOSTNAME` are required, and the rest default as documented there.
 
-The Environment holds the variables listed in `.env.example`; only `SOFTPHONE_PASSWORD` and `ARI_PASSWORD` are required, and the rest default as documented there. Copy the Environment's ID from the 1Password app: Developer > View Environments > Manage environment > Copy environment ID. With `OP_ENVIRONMENT_ID` set, `up.sh` runs Compose under `op run --environment`; run any other `docker compose` command in this directory the same way (`op run --environment "$OP_ENVIRONMENT_ID" -- docker compose ps`). On a host with no 1Password (a cloud VM), unset it and copy `.env.example` to `.env` instead.
+Published ports: SIP `TLS_PORT` (TCP, TLS), RTP `RTP_START`–`RTP_END` (UDP, 1:1), the device endpoint over HTTPS (443), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS`, and `mcp-server`'s `MCP_PORT` on `MCP_BIND_ADDRESS` (all three loopback by default — see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md) for reaching them over Tailscale instead).
 
-`./test-up.sh` tests the detection against stubbed `route` and `ipconfig`.
+`LOCAL_NET` lists the networks Asterisk treats as local (loopback by default — see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md) for why).
 
-Published ports: SIP `SIP_PORT` (UDP and TCP) and `TLS_PORT` (TCP, TLS), RTP `RTP_START`–`RTP_END` (UDP, 1:1), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS`, and `mcp-server`'s `MCP_PORT` on `MCP_BIND_ADDRESS` (all three loopback by default). Open the SIP and RTP ports to the LAN if a host firewall is on. To run the stack on a cloud VM instead, see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
+## Encrypted calls
 
-`LOCAL_NET` lists the networks Asterisk treats as local (loopback by default). Docker presents LAN peers from a gateway address in a private Docker range (`192.168.65.1` or a `172.x` address on Docker Desktop for macOS), so no private range may be listed, or the phone is given the container's internal address in SIP. The soft-phone endpoint's `media_address` is `HOST_LAN_IP`, so SDP always advertises the host for RTP.
-
-## Public HTTPS (cloud host)
-
-When the stack runs on a host the phone reaches over cellular, the device endpoint must be HTTPS. Point a DNS record for `PUBLIC_HOSTNAME` at the host, open port 443, and set in the Environment (or `.env`):
-
-```sh
-COMPOSE_PROFILES=public
-PUBLIC_HOSTNAME=phone.example.com
-DEVICE_BIND_ADDRESS=127.0.0.1   # keep the plain-HTTP device port off the public interface
-```
-
-`./up.sh` then also starts `caddy`; the app uploads its token to `https://PUBLIC_HOSTNAME/device`. Without the `public` profile, `caddy` does not run and `PUBLIC_HOSTNAME` is not needed. With the profile on and `PUBLIC_HOSTNAME` unset, `caddy` exits with an error.
-
-### Encrypted calls
-
-With `PUBLIC_HOSTNAME` set, `asterisk` serves SIP over TLS (TLS 1.2 or newer) on `TLS_PORT` (default 5061, TCP) with Caddy's certificate for that host, and its endpoint requires SDES SRTP (`media_encryption=sdes`); a client offering plain RTP is refused. Plain UDP/TCP on `SIP_PORT` is not served. Leave `PUBLIC_HOSTNAME` unset for the LAN setup: plain UDP/TCP and plain RTP, with no certificate. `PUBLIC_HOSTNAME` therefore needs `COMPOSE_PROFILES=public`, which supplies the certificate. Because `mcp-server` originates to a single endpoint, a stack is either encrypted or plain, never both.
+`asterisk` serves SIP over TLS (TLS 1.2 or newer) on `TLS_PORT` (default 5061, TCP) with Caddy's certificate for `PUBLIC_HOSTNAME`, and its endpoint requires SDES SRTP (`media_encryption=sdes`); a client offering plain RTP is refused.
 
 `asterisk` mounts `caddy-data` read-only and waits at start until the certificate exists. Caddy writes the key as `root` with mode `0600`, so the entrypoint copies the certificate and key into `/etc/asterisk/keys`, owned by `asterisk`. It checks the certificate hourly (`CERT_CHECK_INTERVAL_S`) and, when Caddy renews it, stops Asterisk so the container's restart policy starts it with the new one; an active call ends. Open `TLS_PORT` (TCP) alongside the RTP range.
 
@@ -57,7 +44,7 @@ docker compose exec asterisk asterisk -rx 'pjsip show transports'
 openssl s_client -connect "$PUBLIC_HOSTNAME:5061" -servername "$PUBLIC_HOSTNAME"
 ```
 
-`./test-render-config.sh` tests both renderings of the Asterisk config.
+`./test-render-config.sh` tests the Asterisk config rendering.
 
 Caddy keeps its data in the `caddy-data` volume (`phone-claude-local_caddy-data` on the host), mounted at `/data`. The certificate and key are at `caddy/certificates/acme-v02.api.letsencrypt.org-directory/<PUBLIC_HOSTNAME>/<PUBLIC_HOSTNAME>.crt` and `.key` within it; mount the volume read-only to share them with another service.
 
@@ -67,8 +54,8 @@ Install a SIP app on the phone (Groundwire, Linphone, Zoiper, or the [`ios/`](..
 
 - **Username / auth username:** `SOFTPHONE_USERNAME` (default `phone`)
 - **Password:** `SOFTPHONE_PASSWORD`
-- **Domain / server:** the IP `up.sh` prints (`HOST_LAN_IP`), port `SIP_PORT`
-- **Transport:** UDP (TCP also works)
+- **Domain / server:** `PUBLIC_HOSTNAME`, port `TLS_PORT` (5061)
+- **Transport:** TLS, with SDES SRTP
 
 `mcp-server`'s `SIP_ENDPOINT` must equal `SOFTPHONE_USERNAME`, and its `ARI_USERNAME`/`ARI_PASSWORD` the stack's.
 
@@ -80,15 +67,11 @@ docker compose exec asterisk asterisk -rx 'pjsip show contacts'
 
 The contact should be `Avail`. The `ios/` app unregisters when backgrounded, so the contact is `Unavail` or absent until a VoIP push wakes it. For a third-party app, a locked or backgrounded phone only rings if the app has working push notifications; test that on the actual phone before relying on it.
 
-### Surviving IP changes
-
-The Mac's Bonjour name (`scutil --get LocalHostName`, resolved as `<LocalHostName>.local`) does not change with DHCP, so it can be entered in the app's host field instead of the IP. Not verified: that the app's SIP registration and token upload resolve a `.local` name. Whatever the app uses, `./up.sh` must still be re-run after an IP change, because Asterisk advertises and Docker binds the IP.
-
 ## Ringing a locked phone
 
-`mcp-server` pushes only when ARI reports the endpoint offline. The push wakes the `ios/` app, which re-registers over the LAN (Asterisk stays LAN-only) and answers the INVITE once the user accepts in the native call UI.
+`mcp-server` pushes only when ARI reports the endpoint offline. The push wakes the `ios/` app, which re-registers over cellular and answers the INVITE once the user accepts in the native call UI.
 
-- **Token delivery.** The app `PUT`s its PushKit token to `http://HOST_LAN_IP:DEVICE_PORT/device` with `Authorization: Bearer <SOFTPHONE_PASSWORD>`. The pipeline already runs as a long-lived LAN service with a volume, so the token endpoint and the sender live there rather than in the per-session `mcp-server`, and the key stays out of Claude Code's config. The token is kept in the `pipeline-data` volume and survives restarts.
+- **Token delivery.** The app `PUT`s its PushKit token to `https://PUBLIC_HOSTNAME/device` (via `caddy`) with `Authorization: Bearer <SOFTPHONE_PASSWORD>`. The pipeline already runs as a long-lived cloud service with a volume, so the token endpoint and the sender live there rather than in the per-session `mcp-server`, and the key stays out of Claude Code's config. The token is kept in the `pipeline-data` volume and survives restarts.
 - **Sender.** `POST /push` on the pipeline (loopback) sends an APNs HTTP/2 VoIP push (topic `APNS_TOPIC`, priority 10, 30 s expiry) with token-based auth. It returns `404` with no registered device, `503` if APNs is not configured, and `502` if APNs rejects it; a rejected token is forgotten.
 - **Registration.** The app un-registers (`Expires: 0`) before it stops in the background, so the endpoint goes offline at once. The endpoint's AOR expires registrations in 120 s by default (30–300 s) and qualifies every 5 s with a 2 s timeout, so a contact that vanishes without un-registering (a crash, a lost network) goes unavailable within about 7 s and the next `ask_by_phone` pushes instead of dialling a dead contact. The qualify `OPTIONS` is one small packet per 5 s to a single contact, which a live phone answers well within 2 s.
 
