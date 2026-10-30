@@ -87,9 +87,9 @@ services:
       MAX_WAIT_MS: ${MAX_WAIT_MS:-600000}
       PUSH_WAIT_MS: ${PUSH_WAIT_MS:-20000}
       RING_TIMEOUT_S: ${RING_TIMEOUT_S:-60}
-      MCP_PORT: 8090
+      MCP_PORT: 80
     ports:
-      - "${MCP_BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-8090}:8090"
+      - "${MCP_BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-80}:80"
 
   # Public HTTPS front for the device endpoint; enabled by `COMPOSE_PROFILES=public`.
   caddy:

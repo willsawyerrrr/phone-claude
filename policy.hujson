@@ -18,7 +18,7 @@
 		{
 			"src": ["wmsawyer2609@gmail.com"],
 			"dst": ["tag:phone-claude-vps"],
-			"ip":  ["8090"],
+			"ip":  ["80"],
 		},
 		{
 			"src": ["tag:ci"],
