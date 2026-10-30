@@ -8,7 +8,7 @@ Services:
 - **`asterisk` with `PUBLIC_HOSTNAME` set** — SIP is TLS-only on `TLS_PORT` (5061) and calls require SDES SRTP, so the SIP password and audio are encrypted; the plain UDP/TCP transports are off. See [Encrypted calls](#encrypted-calls).
 - **`caddy`** (optional, `public` profile) — terminates HTTPS for `PUBLIC_HOSTNAME` with an automatic Let's Encrypt certificate and proxies only `PUT /device` to `voice-pipeline:8081`; every other path is `404`.
 - **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, on `PIPELINE_BIND_ADDRESS`, loopback by default) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
-- **`mcp-server`** — the MCP server itself, over Streamable HTTP (`:8090`, on `MCP_BIND_ADDRESS`, loopback by default), for a Claude Code instance that isn't running it locally. Reaches `asterisk`/`voice-pipeline` by their Compose service names. See [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
+- **`mcp-server`** — the MCP server itself, over Streamable HTTP (`:80`, on `MCP_BIND_ADDRESS`, loopback by default), for a Claude Code instance that isn't running it locally. Reaches `asterisk`/`voice-pipeline` by their Compose service names. See [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
 
 The AudioSocket connection is made only once the phone answers.
 

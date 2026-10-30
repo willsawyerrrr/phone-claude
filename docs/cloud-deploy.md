@@ -1,12 +1,12 @@
 # Cloud deploy
 
-Runs the `local/` stack on one cloud VM for one phone, using DigitalOcean in Sydney (`syd1`) as the example. SIP (TLS), RTP and the HTTPS device endpoint are public; ARI (`8088`), the pipeline API (`8080`) and `mcp-server` (`8090`) are reachable only over Tailscale. `mcp-server` itself runs on the VM, next to Asterisk and the voice pipeline (reaching them over the Compose network, not Tailscale); Claude Code connects to it remotely instead of running it locally.
+Runs the `local/` stack on one cloud VM for one phone, using DigitalOcean in Sydney (`syd1`) as the example. SIP (TLS), RTP and the HTTPS device endpoint are public; ARI (`8088`), the pipeline API (`8080`) and `mcp-server` (`80`) are reachable only over Tailscale. `mcp-server` itself runs on the VM, next to Asterisk and the voice pipeline (reaching them over the Compose network, not Tailscale); Claude Code connects to it remotely instead of running it locally.
 
 ## VM
 
 - x86 Ubuntu LTS droplet in `syd1`, 4 GB RAM minimum (Whisper `base.en`, Piper and Asterisk), e.g. `s-2vcpu-4gb`.
 - Assign a reserved IP to the droplet; it is the stable public address (`HOST_LAN_IP`).
-- Point an `A` record for `phone-claude.willsawyerrrr.dev` at the reserved IP.
+- Point an `A` record for `phone-claude.willsawyerrrr.dev` at the reserved IP, and one for `mcp.phone-claude.willsawyerrrr.dev` at the VM's tailnet IP — a friendlier name for `mcp-server`'s Tailscale-only endpoint than the generated `<tailnet name>.ts.net`. Publishing it doesn't expose anything: the tailnet IP it points at isn't routable off the tailnet.
 - Install Docker Engine and the Compose plugin ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/ubuntu/)).
 
 ## Tailscale
@@ -38,7 +38,7 @@ DigitalOcean Cloud Firewall attached to the droplet, inbound only:
 | UDP      | 10000-10100 | RTP (`RTP_START`-`RTP_END`) |
 | TCP      | 443         | Device endpoint over HTTPS  |
 
-Do not open `22`, `8080`, `8081`, `8088` or `8090`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI, the pipeline and `mcp-server` to the tailnet IP as below.
+Do not open `22`, `80`, `8080`, `8081` or `8088`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI, the pipeline and `mcp-server` to the tailnet IP as below.
 
 ## Stack
 
@@ -83,7 +83,7 @@ Create the `PUBLIC_HOSTNAME` `A` record before starting; `caddy` obtains its Let
 `mcp-server` runs on the VM as part of the stack (see [`local/README.md`](../local/README.md)), so Claude Code reaches it over HTTP instead of launching it locally. Register it as a remote MCP server at user scope, alongside (or instead of) the project's local stdio entry in `.mcp.json`:
 
 ```sh
-claude mcp add --scope user --transport http phone-claude-cloud http://<tailnet name>:8090/mcp
+claude mcp add --scope user --transport http phone-claude-cloud http://mcp.phone-claude.willsawyerrrr.dev/mcp
 ```
 
 Use a different name from the project's own `phone-claude` entry if both are ever registered at once.
