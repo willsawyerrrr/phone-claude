@@ -9,7 +9,8 @@
 #                                             blind, then print which was which
 #
 # `call` needs the stack up (`./up.sh`) and `pnpm install` run at the repo root;
-# it loads the mounted 1Password Environment file `~/willsawyerrrr.dev/phone-claude/.env`.
+# it runs under `load-env` with the mounted 1Password Environment file
+# `~/willsawyerrrr.dev/phone-claude/.env`.
 set -eu
 cd "$(dirname "$0")"
 
@@ -22,11 +23,9 @@ case "${1:-}" in
     ;;
   call)
     shift
-    set -a
-    # shellcheck source=/dev/null
-    . "$HOME/willsawyerrrr.dev/phone-claude/.env"
-    set +a
-    exec pnpm --dir ../mcp-server audition "$@"
+    exec "$HOME/willsawyerrrr.dev/platform/main/scripts/load-env" \
+      "$HOME/willsawyerrrr.dev/phone-claude/.env" -- \
+      pnpm --dir ../mcp-server audition "$@"
     ;;
   *)
     sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2
