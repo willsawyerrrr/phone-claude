@@ -18,7 +18,8 @@ pnpm workspace with one package:
 deployed to the cloud VM (`docs/cloud-deploy.md`) — it is not run anywhere
 else. Start it with `local/up.sh` (`HOST_LAN_IP=<reserved IP> ./up.sh`),
 which just runs Compose; the VM has no 1Password, so configuration comes
-from `.env`. The
+from `.env`. Developer-side scripts source the mounted Phone Claude 1Password
+Environment file, `$HOME/willsawyerrrr.dev/phone-claude/.env`. The
 `asterisk` service renders its config from env at container start
 (`local/asterisk/render-config.sh`), so it runs unchanged on any host. It has
 one PJSIP endpoint (the soft-phone, named `SOFTPHONE_USERNAME`, which is
