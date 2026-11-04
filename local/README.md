@@ -5,7 +5,9 @@ local network involved — it runs on a cloud VM (see
 [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md)). Everything
 host-specific comes from `.env`, and `HOST_LAN_IP` is the VM's public
 (reserved) IP. Developer-side tooling (`audition.sh call`, the capture analysis)
-sources the mounted Phone Claude 1Password Environment file,
+runs under `load-env`
+(`$HOME/willsawyerrrr.dev/platform/main/scripts/load-env`), which loads the
+mounted Phone Claude 1Password Environment file,
 `$HOME/willsawyerrrr.dev/phone-claude/.env`.
 
 Services:
