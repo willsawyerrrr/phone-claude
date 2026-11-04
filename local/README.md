@@ -4,7 +4,9 @@ A Docker Compose stack that rings a SIP soft-phone over cellular, with no
 local network involved — it runs on a cloud VM (see
 [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md)). Everything
 host-specific comes from `.env`, and `HOST_LAN_IP` is the VM's public
-(reserved) IP.
+(reserved) IP. Developer-side tooling (`audition.sh call`, the capture analysis)
+sources the mounted Phone Claude 1Password Environment file,
+`$HOME/willsawyerrrr.dev/phone-claude/.env`.
 
 Services:
 
