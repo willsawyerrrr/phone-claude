@@ -14,7 +14,7 @@ FROM base AS models
 ADD --chmod=0644 --checksum=sha256:2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f \
     https://github.com/snakers4/silero-vad/raw/v5.1.2/src/silero_vad/data/silero_vad.onnx \
     /models/silero_vad.onnx
-ADD --checksum=sha256:2f3b88823cbbb9bf0b2477ec8ae7b3fec417b3a87b6bb5f256dba66f2ad967cb \
+ADD --checksum=sha256:f4da7c7bd465f7b91e89191487fe90504396a51d6f0bcf94d0787633e2657293 \
     https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2 \
     /tmp/pocket.tar.bz2
 ARG KYUTAI_VOICES_REV=323332d33f997de8394f24a193e1a76df720e01a

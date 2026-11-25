@@ -53,8 +53,8 @@ RTF (synthesis time over audio duration; below 1 keeps up with a call) is 0.48 f
 ### Licences
 
 - Model: CC BY 4.0 ([`kyutai/pocket-tts`](https://huggingface.co/kyutai/pocket-tts)).
-- ONNX export: the [`sherpa-onnx-pocket-tts-int8`](https://huggingface.co/csukuangfj2/sherpa-onnx-pocket-tts-int8-2026-01-26) README calls it non-commercial, deferring to the licence of the [`pocket-tts-onnx`](https://huggingface.co/KevinAHM/pocket-tts-onnx/blob/main/onnx/LICENSE) export it derives from. This stack is for personal use; check that licence before any commercial use.
-- Voices: Alba MacKenna recordings, CC BY 4.0.
+- ONNX export: weights CC BY 4.0, code Apache 2.0 ([`sherpa-onnx-pocket-tts-int8`](https://huggingface.co/csukuangfj2/sherpa-onnx-pocket-tts-int8-2026-01-26), from the [`pocket-tts-onnx`](https://huggingface.co/KevinAHM/pocket-tts-onnx/blob/main/onnx/LICENSE) export).
+- Voices: Alba MacKenna recordings, CC BY 4.0 ([`kyutai/tts-voices`](https://huggingface.co/kyutai/tts-voices#alba-mackenna)).
 
 ### Auditioning
 
