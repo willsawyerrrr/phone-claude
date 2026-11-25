@@ -92,7 +92,10 @@ device endpoint. See `ios/README.md`.
   `requires-python` and `.python-version`; Dependabot ignores Python major and
   minor bumps of the base image):
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
-docker run --rm voice-pipeline-test`.
+docker run --rm voice-pipeline-test`. The model smoke tests
+  (`tests/test_models_smoke.py`) skip there; run them against the real models
+  with `docker build --target smoke -t voice-pipeline-smoke local/voice-pipeline &&
+docker run --rm voice-pipeline-smoke`.
 - Stack scripts: `shellcheck local/up.sh local/audition.sh local/test-render-config.sh && local/test-render-config.sh`.
 - iOS (CI and the TestFlight deploy both pin the `xcode-27` runner and Xcode 27.2, the
   newest GA Xcode on GitHub's runners): in `ios/`, `xcodegen generate`, then
@@ -106,6 +109,10 @@ docker run --rm voice-pipeline-test`.
   ruleset requires, so any new job must be added to its `needs:`. The ruleset
   also requires a pull request (squash merges only) and blocks force pushes and
   deletion.
+- The `voice-pipeline-smoke` job builds the `smoke` image (the `test` image
+  plus the models) with the build layers cached in the GitHub Actions cache, and
+  runs the model smoke tests. `REQUIRE_MODELS` makes them fail rather than
+  skip if the models are missing.
 - The `ios` job caches DerivedData, Swift packages included, with platform's
   `xcode-cache` action.
 
