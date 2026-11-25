@@ -55,6 +55,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app
     steps:
       - uses: actions/checkout@v7
+      - uses: willsawyerrrr/platform/.github/actions/xcode-cache@main
       - run: brew install xcodegen
       - run: xcodegen generate
         working-directory: ios
