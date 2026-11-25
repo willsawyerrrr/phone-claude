@@ -2,7 +2,7 @@
   "mcpServers": {
     "phone-claude": {
       "type": "http",
-      "url": "http://mcp.phone-claude.willsawyerrrr.dev/mcp"
+      "url": "https://mcp.phone-claude.willsawyerrrr.dev/mcp"
     }
   }
 }

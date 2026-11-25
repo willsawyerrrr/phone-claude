@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "./config.js";
+import { loadAuthConfig, loadConfig } from "./config.js";
 
 const baseEnv = {
   ARI_USERNAME: "phone-claude",
@@ -94,5 +94,32 @@ describe("loadConfig", () => {
 
   it("accepts fractional positive durations", () => {
     expect(loadConfig({ ...baseEnv, MAX_WAIT_MS: "1.5" }).maxWaitMs).toBe(1.5);
+  });
+});
+
+describe("loadAuthConfig", () => {
+  const authEnv = {
+    PUBLIC_URL: "https://mcp.example.com",
+    GOOGLE_CLIENT_ID: "id",
+    GOOGLE_CLIENT_SECRET: "secret",
+    ALLOWED_EMAIL: "Me@Example.com",
+    AUTH_SECRET: "s".repeat(32),
+  };
+
+  it("loads every setting, lower-casing the allowed email", () => {
+    expect(loadAuthConfig(authEnv)).toMatchObject({
+      publicUrl: new URL("https://mcp.example.com"),
+      allowedEmail: "me@example.com",
+    });
+  });
+
+  it.each(Object.keys(authEnv))("requires %s", (name) => {
+    expect(() => loadAuthConfig({ ...authEnv, [name]: "" })).toThrow(name);
+  });
+
+  it("rejects a short AUTH_SECRET", () => {
+    expect(() =>
+      loadAuthConfig({ ...authEnv, AUTH_SECRET: "s".repeat(31) }),
+    ).toThrow("at least 32 bytes");
   });
 });

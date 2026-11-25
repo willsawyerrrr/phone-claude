@@ -13,13 +13,13 @@ Claude Code ──ask_by_phone──▶ mcp-server                        ▲   
                                   └── POST /ari/channels ────▶ Asterisk ──SIP──▶ your phone
 ```
 
-- **`mcp-server/`** — an MCP server exposing one tool, `ask_by_phone`, which registers the question with the voice pipeline, has Asterisk originate the call over ARI, and polls the pipeline for the answer. Deployed alongside the stack and reached over Streamable HTTP.
+- **`mcp-server/`** — an MCP server exposing one tool, `ask_by_phone`, which registers the question with the voice pipeline, has Asterisk originate the call over ARI, and polls the pipeline for the answer. Deployed alongside the stack and reached over Streamable HTTP, behind OAuth.
 - **The stack** — Asterisk (SIP) and the voice pipeline (speaks the question, captures the spoken reply), run as a Docker Compose stack on a cloud VM. Your phone rings through a SIP soft-phone registered to Asterisk.
 - **`ios/`** — a SwiftUI SIP soft-phone for iOS that registers to Asterisk and answers the call. It rings from the lock screen through CallKit, woken by a VoIP push. See [`ios/README.md`](ios/README.md).
 
 ## Setup
 
-This runs entirely on a cloud VM, reached over Tailscale — see [`docs/cloud-deploy.md`](docs/cloud-deploy.md) for the full setup. Once deployed, the repo's `.mcp.json` registers `ask_by_phone` for any Claude Code session started in this checkout; no local setup is needed.
+This runs entirely on a cloud VM — see [`docs/cloud-deploy.md`](docs/cloud-deploy.md) for the full setup. Once deployed, `mcp-server` is public at `https://mcp.phone-claude.willsawyerrrr.dev/mcp`, behind OAuth that admits only one Google account. The repo's `.mcp.json` registers it for any Claude Code session started in this checkout, and it can be added as a custom connector in the Claude app (see [`docs/cloud-deploy.md`](docs/cloud-deploy.md#claude)).
 
 ## Development
 

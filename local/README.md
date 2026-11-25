@@ -13,25 +13,25 @@ mounted Phone Claude 1Password Environment file,
 Services:
 
 - **`asterisk`** — the PBX. One PJSIP endpoint (the soft-phone, offering G.722 first, then `ulaw,alaw`), ARI on port 8088, and an `ask-by-phone` dialplan context. An ARI-originated call rings the soft-phone; once answered, extension `700` streams the call's audio over AudioSocket (16 kHz `slin16`) to `voice-pipeline:9092`, keyed by the `CALL_ID` channel variable. `CALL_ID` must be a UUID, and is the connection's ID verbatim. SIP is TLS-only on `TLS_PORT` (5061) and calls require SDES SRTP, so the SIP password and audio are encrypted. See [Encrypted calls](#encrypted-calls).
-- **`caddy`** — terminates HTTPS for `PUBLIC_HOSTNAME` with an automatic Let's Encrypt certificate and proxies only `PUT /device` to `voice-pipeline:8081`; every other path is `404`.
+- **`caddy`** — terminates HTTPS with automatic Let's Encrypt certificates: for `PUBLIC_HOSTNAME` it proxies only `PUT /device` to `voice-pipeline:8081` (every other path is `404`), and for `MCP_PUBLIC_HOSTNAME` everything to `mcp-server:80`.
 - **`voice-pipeline`** — speaks the question and captures the spoken reply, using local VAD, speech-to-text, and text-to-speech models. Its HTTP API (`:8080`, on `PIPELINE_BIND_ADDRESS`, loopback by default) is what `mcp-server` registers prompts with and polls; AudioSocket (`:9092`) is reachable only inside the Docker network. See [`voice-pipeline/README.md`](voice-pipeline/README.md).
-- **`mcp-server`** — the MCP server itself, over Streamable HTTP (`:80`, on `MCP_BIND_ADDRESS`, loopback by default), that Claude Code connects to remotely over Tailscale. Reaches `asterisk`/`voice-pipeline` by their Compose service names. See [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
+- **`mcp-server`** — the MCP server itself, over Streamable HTTP, served publicly by `caddy` at `https://<MCP_PUBLIC_HOSTNAME>/mcp` and unpublished on the host. It is its own OAuth authorization server: `/mcp` needs a bearer token it issued, and only `ALLOWED_EMAIL`, signed in with Google, can authorise one. Reaches `asterisk`/`voice-pipeline` by their Compose service names. See [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md).
 
 The AudioSocket connection is made only once the phone answers.
 
 ## Setup
 
 ```sh
-cp .env.example .env   # fill in SOFTPHONE_PASSWORD, ARI_PASSWORD, PUBLIC_HOSTNAME, ...
+cp .env.example .env   # fill in SOFTPHONE_PASSWORD, ARI_PASSWORD, PUBLIC_HOSTNAME, MCP_PUBLIC_HOSTNAME, ...
 HOST_LAN_IP=<reserved IP> ./up.sh   # the first build downloads the speech models (~2.8 GB image)
 docker compose ps                  # asterisk and voice-pipeline should report "healthy"
 ```
 
 `HOST_LAN_IP` must be set — it's the VM's public address as the phone reaches it; Asterisk advertises it in SIP and SDP, so the phone sends signalling and RTP back to the published ports on this host. `up.sh` just runs `docker compose up -d --build`; re-run it after `.env` or `HOST_LAN_IP` changes (Compose recreates the containers whose configuration changed).
 
-The variables are listed in `.env.example`; only `SOFTPHONE_PASSWORD`, `ARI_PASSWORD` and `PUBLIC_HOSTNAME` are required, and the rest default as documented there.
+The variables are listed in `.env.example`; only `SOFTPHONE_PASSWORD`, `ARI_PASSWORD`, `PUBLIC_HOSTNAME`, `MCP_PUBLIC_HOSTNAME`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_EMAIL` and `AUTH_SECRET` are required, and the rest default as documented there.
 
-Published ports: SIP `TLS_PORT` (TCP, TLS), RTP `RTP_START`–`RTP_END` (UDP, 1:1), the device endpoint over HTTPS (443), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS`, and `mcp-server`'s `MCP_PORT` on `MCP_BIND_ADDRESS` (all three loopback by default — see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md) for reaching them over Tailscale instead).
+Published ports: SIP `TLS_PORT` (TCP, TLS), RTP `RTP_START`–`RTP_END` (UDP, 1:1), HTTPS (443, the device endpoint and `mcp-server`), ARI `ARI_PORT` on `ARI_BIND_ADDRESS`, and the pipeline API `PIPELINE_PORT` on `PIPELINE_BIND_ADDRESS` (both loopback by default — see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md) for reaching them over Tailscale instead).
 
 `LOCAL_NET` lists the networks Asterisk treats as local (loopback by default — see [`../docs/cloud-deploy.md`](../docs/cloud-deploy.md) for why).
 
@@ -50,7 +50,7 @@ openssl s_client -connect "$PUBLIC_HOSTNAME:5061" -servername "$PUBLIC_HOSTNAME"
 
 `./test-render-config.sh` tests the Asterisk config rendering.
 
-Caddy keeps its data in the `caddy-data` volume (`phone-claude-local_caddy-data` on the host), mounted at `/data`. The certificate and key are at `caddy/certificates/acme-v02.api.letsencrypt.org-directory/<PUBLIC_HOSTNAME>/<PUBLIC_HOSTNAME>.crt` and `.key` within it; mount the volume read-only to share them with another service.
+Caddy keeps its data in the `caddy-data` volume (`phone-claude-local_caddy-data` on the host), mounted at `/data`. Each host's certificate and key are at `caddy/certificates/acme-v02.api.letsencrypt.org-directory/<host>/<host>.crt` and `.key` within it (`asterisk` reads `PUBLIC_HOSTNAME`'s); mount the volume read-only to share them with another service.
 
 ## Pairing the soft-phone
 

@@ -1,12 +1,12 @@
 # Cloud deploy
 
-Runs the `local/` stack on one cloud VM for one phone, using DigitalOcean in Sydney (`syd1`) as the example. SIP (TLS), RTP and the HTTPS device endpoint are public; ARI (`8088`), the pipeline API (`8080`) and `mcp-server` (`80`) are reachable only over Tailscale. `mcp-server` itself runs on the VM, next to Asterisk and the voice pipeline (reaching them over the Compose network, not Tailscale); Claude Code connects to it remotely instead of running it locally.
+Runs the `local/` stack on one cloud VM for one phone, using DigitalOcean in Sydney (`syd1`) as the example. SIP (TLS), RTP, the HTTPS device endpoint and `mcp-server` (HTTPS, behind OAuth) are public; ARI (`8088`) and the pipeline API (`8080`) are reachable only over Tailscale. `mcp-server` runs on the VM, next to Asterisk and the voice pipeline (reaching them over the Compose network); Claude Code and the Claude app connect to it remotely.
 
 ## VM
 
 - x86 Ubuntu LTS droplet in `syd1`, 4 GB RAM minimum (Whisper `base.en`, Piper and Asterisk), e.g. `s-2vcpu-4gb`.
 - Assign a reserved IP to the droplet; it is the stable public address (`HOST_LAN_IP`).
-- Point an `A` record for `phone-claude.willsawyerrrr.dev` at the reserved IP, and one for `mcp.phone-claude.willsawyerrrr.dev` at the VM's tailnet IP — a friendlier name for `mcp-server`'s Tailscale-only endpoint than the generated `<tailnet name>.ts.net`. Publishing it doesn't expose anything: the tailnet IP it points at isn't routable off the tailnet.
+- Point `A` records for `phone-claude.willsawyerrrr.dev` (`PUBLIC_HOSTNAME`) and `mcp.phone-claude.willsawyerrrr.dev` (`MCP_PUBLIC_HOSTNAME`) at the reserved IP.
 - Install Docker Engine and the Compose plugin ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/ubuntu/)).
 
 ## Tailscale
@@ -31,14 +31,14 @@ One Tailscale OAuth client, scoped to both `auth_keys` and `policy_file`, backs 
 
 DigitalOcean Cloud Firewall attached to the droplet, inbound only:
 
-| Protocol | Port        | Purpose                     |
-| -------- | ----------- | --------------------------- |
-| UDP, TCP | 5060        | SIP (`SIP_PORT`)            |
-| TCP      | 5061        | SIP over TLS                |
-| UDP      | 10000-10100 | RTP (`RTP_START`-`RTP_END`) |
-| TCP      | 443         | Device endpoint over HTTPS  |
+| Protocol | Port        | Purpose                       |
+| -------- | ----------- | ----------------------------- |
+| UDP, TCP | 5060        | SIP (`SIP_PORT`)              |
+| TCP      | 5061        | SIP over TLS                  |
+| UDP      | 10000-10100 | RTP (`RTP_START`-`RTP_END`)   |
+| TCP      | 443         | Device endpoint, `mcp-server` |
 
-Do not open `22`, `80`, `8080`, `8081` or `8088`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI, the pipeline and `mcp-server` to the tailnet IP as below.
+Do not open `22`, `80`, `8080`, `8081` or `8088`; SSH goes through Tailscale (`ssh root@<tailnet name>`). Docker publishes ports around the host firewall, so rely on this cloud firewall, and bind ARI and the pipeline to the tailnet IP as below. `mcp-server` is not published on the host; `caddy` reaches it over the Compose network.
 
 ## Stack
 
@@ -55,10 +55,14 @@ SOFTPHONE_PASSWORD=<long random>
 ARI_PASSWORD=<long random>
 ARI_BIND_ADDRESS=<tailnet IP>
 PIPELINE_BIND_ADDRESS=<tailnet IP>
-MCP_BIND_ADDRESS=<tailnet IP>
 DEVICE_BIND_ADDRESS=127.0.0.1
 COMPOSE_PROFILES=public
 PUBLIC_HOSTNAME=phone-claude.willsawyerrrr.dev
+MCP_PUBLIC_HOSTNAME=mcp.phone-claude.willsawyerrrr.dev
+GOOGLE_CLIENT_ID=<from the Google OAuth client below>
+GOOGLE_CLIENT_SECRET=<from the Google OAuth client below>
+ALLOWED_EMAIL=<the one Google account allowed to authorise>
+AUTH_SECRET=<openssl rand -base64 48>
 LOCAL_NET=127.0.0.0/8
 # APNS_* as in local/README.md; copy the .p8 key to ~/.config/phone-claude/apns_key.p8 on
 # the VM and chmod 644 it, so the container's non-root `pipeline` user can read the secret
@@ -76,12 +80,35 @@ Running this from a script with no login shell (e.g. a cloud-init `user_data` sc
 
 `LOCAL_NET` stays loopback only. On a public host every peer is non-local, so Asterisk gives the phone `HOST_LAN_IP` in SIP and SDP; listing a private range would hand it a container address.
 
-Create the `PUBLIC_HOSTNAME` `A` record before starting; `caddy` obtains its Let's Encrypt certificate on first start (see [`local/README.md`](../local/README.md#encrypted-calls)). In the phone app, use TLS mode with host `phone-claude.willsawyerrrr.dev` and SIP port `5061`; the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
+Create both `A` records before starting; `caddy` obtains their Let's Encrypt certificates on first start (see [`local/README.md`](../local/README.md#encrypted-calls)). In the phone app, use TLS mode with host `phone-claude.willsawyerrrr.dev` and SIP port `5061`; the app uploads its token to `https://phone-claude.willsawyerrrr.dev/device`; see [`local/README.md`](../local/README.md#pairing-the-soft-phone).
 
-## Claude Code
+## Google OAuth client
 
-`mcp-server` runs on the VM as part of the stack (see [`local/README.md`](../local/README.md)), reached over Tailscale. The repo's `.mcp.json` already registers it (`http://mcp.phone-claude.willsawyerrrr.dev/mcp`), so any Claude Code session started in this checkout just works once you're on the tailnet — no setup step. To use it from outside this checkout, register it at user scope instead:
+`mcp-server` is its own OAuth authorization server for MCP clients and delegates sign-in to Google, admitting only `ALLOWED_EMAIL` (with a verified email). In the Google Cloud Console:
+
+1. Google Auth Platform → Audience: user type External, publishing status Testing, with `ALLOWED_EMAIL` as a test user.
+2. Clients → Create client: type Web application, authorised redirect URI `https://mcp.phone-claude.willsawyerrrr.dev/oauth/google/callback`. Its client ID and secret are `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
+
+`mcp-server` refuses to start unless all of `MCP_PUBLIC_HOSTNAME`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_EMAIL` and `AUTH_SECRET` (at least 32 bytes) are set. Its endpoints, under `https://mcp.phone-claude.willsawyerrrr.dev`:
+
+| Path                                        | Purpose                                    |
+| ------------------------------------------- | ------------------------------------------ |
+| `/mcp`                                      | MCP, bearer token required                 |
+| `/.well-known/oauth-protected-resource/mcp` | Protected resource metadata (RFC 9728)     |
+| `/.well-known/oauth-authorization-server`   | Authorization server metadata              |
+| `/register`                                 | Dynamic client registration                |
+| `/authorize`                                | Starts sign-in (PKCE), redirects to Google |
+| `/oauth/google/callback`                    | Google's redirect back                     |
+| `/token`                                    | Code and refresh-token exchange            |
+
+Client IDs, codes and tokens are sealed with `AUTH_SECRET`, so nothing is stored and restarts sign no one out; changing `AUTH_SECRET` (or `ALLOWED_EMAIL`) invalidates every client and token. Only Claude's connector callback and loopback redirect URIs can be registered.
+
+## Claude
+
+The repo's `.mcp.json` registers `mcp-server` (`https://mcp.phone-claude.willsawyerrrr.dev/mcp`) for any Claude Code session started in this checkout; the first use opens a browser to sign in with Google (or run `/mcp` to authenticate). To use it from outside this checkout, register it at user scope:
 
 ```sh
-claude mcp add --scope user --transport http phone-claude-cloud http://mcp.phone-claude.willsawyerrrr.dev/mcp
+claude mcp add --scope user --transport http phone-claude https://mcp.phone-claude.willsawyerrrr.dev/mcp
 ```
+
+In the Claude desktop app or claude.ai: Settings → Connectors → Add custom connector, with URL `https://mcp.phone-claude.willsawyerrrr.dev/mcp`, then Connect and sign in with `ALLOWED_EMAIL`.

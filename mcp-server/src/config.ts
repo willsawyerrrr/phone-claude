@@ -12,6 +12,19 @@ export interface Config {
   ringTimeoutS: number;
 }
 
+/** OAuth settings for `/mcp`; every one is required, so the server never serves it unauthenticated. */
+export interface AuthConfig {
+  /** Issuer and base of the protected resource, e.g. `https://mcp.example.com`. */
+  publicUrl: URL;
+  googleClientId: string;
+  googleClientSecret: string;
+  /** Lower-cased; the only Google account allowed to authorise. */
+  allowedEmail: string;
+  authSecret: string;
+}
+
+const MIN_AUTH_SECRET_BYTES = 32;
+
 const DEFAULT_PIPELINE_URL = "http://localhost:8080";
 const DEFAULT_ARI_URL = "http://localhost:8088";
 const DEFAULT_SIP_ENDPOINT = "phone";
@@ -42,6 +55,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxWaitMs: positiveNumber(env, "MAX_WAIT_MS", DEFAULT_MAX_WAIT_MS),
     pushWaitMs: positiveNumber(env, "PUSH_WAIT_MS", DEFAULT_PUSH_WAIT_MS),
     ringTimeoutS: positiveNumber(env, "RING_TIMEOUT_S", DEFAULT_RING_TIMEOUT_S),
+  };
+}
+
+export function loadAuthConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): AuthConfig {
+  const rawPublicUrl = requireEnv(env, "PUBLIC_URL");
+  if (!URL.canParse(rawPublicUrl)) {
+    throw new Error(`PUBLIC_URL must be a URL, got: ${rawPublicUrl}`);
+  }
+  const authSecret = requireEnv(env, "AUTH_SECRET");
+  if (Buffer.byteLength(authSecret) < MIN_AUTH_SECRET_BYTES) {
+    throw new Error(
+      `AUTH_SECRET must be at least ${MIN_AUTH_SECRET_BYTES} bytes`,
+    );
+  }
+
+  return {
+    publicUrl: new URL(rawPublicUrl),
+    googleClientId: requireEnv(env, "GOOGLE_CLIENT_ID"),
+    googleClientSecret: requireEnv(env, "GOOGLE_CLIENT_SECRET"),
+    allowedEmail: requireEnv(env, "ALLOWED_EMAIL").toLowerCase(),
+    authSecret,
   };
 }
 
