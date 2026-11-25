@@ -1,5 +1,6 @@
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createSealer } from "./auth.js";
 import type { Config } from "./config.js";
 
 const config: Config = {
@@ -16,7 +17,8 @@ const config: Config = {
   ringTimeoutS: 60,
 };
 
-vi.mock("./config.js", () => ({
+vi.mock("./config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./config.js")>()),
   loadConfig: vi.fn(() => config),
 }));
 
@@ -28,8 +30,32 @@ vi.mock("./client.js", () => ({
 
 const { startCall, pollForAnswer } = await import("./client.js");
 
-process.env.MCP_PORT = "0";
+const AUTH_SECRET = "a".repeat(32);
+Object.assign(process.env, {
+  MCP_PORT: "0",
+  PUBLIC_URL: "http://127.0.0.1",
+  GOOGLE_CLIENT_ID: "google-client",
+  GOOGLE_CLIENT_SECRET: "google-secret",
+  ALLOWED_EMAIL: "me@example.com",
+  AUTH_SECRET,
+});
 const { server } = await import("./http.js");
+
+const accessToken = await createSealer(AUTH_SECRET).seal(
+  "access",
+  {
+    cid: "client",
+    sub: "me@example.com",
+    scopes: [],
+    aud: "http://127.0.0.1/mcp",
+  },
+  60,
+);
+const headers = {
+  "content-type": "application/json",
+  accept: "application/json, text/event-stream",
+  authorization: `Bearer ${accessToken}`,
+};
 
 let baseUrl: string;
 
@@ -48,10 +74,7 @@ afterAll(async () => {
 async function initialize(): Promise<void> {
   await fetch(`${baseUrl}/mcp`, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream",
-    },
+    headers,
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: 0,
@@ -71,10 +94,7 @@ async function callAskByPhone(args: {
 }): Promise<{ status: number; body: unknown }> {
   const response = await fetch(`${baseUrl}/mcp`, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream",
-    },
+    headers,
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
@@ -121,9 +141,24 @@ describe("POST /mcp", () => {
   });
 });
 
+describe("POST /mcp without a token", () => {
+  it("returns 401 pointing at the protected resource metadata", async () => {
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: { ...headers, authorization: "" },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain(
+      'resource_metadata="http://127.0.0.1/.well-known/oauth-protected-resource/mcp"',
+    );
+  });
+});
+
 describe("GET, DELETE /mcp", () => {
   it.each(["GET", "DELETE"])("returns 405 for %s", async (method) => {
-    const response = await fetch(`${baseUrl}/mcp`, { method });
+    const response = await fetch(`${baseUrl}/mcp`, { method, headers });
 
     expect(response.status).toBe(405);
     await expect(response.json()).resolves.toMatchObject({

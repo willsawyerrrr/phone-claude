@@ -1,6 +1,6 @@
-# Terminates TLS for PUBLIC_HOSTNAME with an automatic Let's Encrypt
-# certificate and exposes only the device-registration endpoint.
-# Certificates are stored in the `caddy-data` volume (`/data`), under
+# Terminates TLS with automatic Let's Encrypt certificates: PUBLIC_HOSTNAME
+# exposes only the device-registration endpoint, and MCP_PUBLIC_HOSTNAME all of
+# `mcp-server` (it authenticates every `/mcp` request itself). Certificates are stored in the `caddy-data` volume (`/data`), under
 # `caddy/certificates/acme-v02.api.letsencrypt.org-directory/<host>/<host>.{crt,key}`.
 # `route` runs its directives in the order written; without it Caddy sorts
 # `respond` ahead of `reverse_proxy`, so the unconditional 404 would answer
@@ -14,5 +14,13 @@
 	route {
 		reverse_proxy @device voice-pipeline:8081
 		respond 404
+	}
+}
+
+# `flush_interval -1` streams responses as written; `ask_by_phone` can hold a
+# request open for minutes, and Caddy sets no response timeout by default.
+{$MCP_PUBLIC_HOSTNAME} {
+	reverse_proxy mcp-server:80 {
+		flush_interval -1
 	}
 }

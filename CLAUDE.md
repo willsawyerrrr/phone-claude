@@ -10,9 +10,22 @@ pnpm workspace with one package:
   entrypoint, `src/http.ts` (Streamable HTTP, stateless — one `McpServer`
   per request, since `ask_by_phone` has no use for session resumability),
   built and run from `mcp-server/Dockerfile` as the `mcp-server` Compose
-  service. The root `.mcp.json` registers it directly as a remote HTTP MCP
-  server (`http://mcp.phone-claude.willsawyerrrr.dev/mcp`, reached over
-  Tailscale) — there is no local launch.
+  service; `src/app.ts` builds its Express app. The root `.mcp.json`
+  registers it directly as a remote HTTP MCP server
+  (`https://mcp.phone-claude.willsawyerrrr.dev/mcp`, public through `caddy`)
+  — there is no local launch. It is also a custom connector in the Claude
+  app. `src/auth.ts` makes it its own OAuth 2.1 authorization server (the
+  SDK's `mcpAuthRouter`: metadata, dynamic client registration, PKCE) and
+  guards `/mcp` with `requireBearerAuth`. Sign-in is delegated to Google
+  (`/oauth/google/callback`), and only `ALLOWED_EMAIL` (verified) is
+  admitted. Client IDs, codes, access tokens (1 h, bound to the `/mcp`
+  resource) and refresh tokens (30 days, rotated) are encrypted JWTs keyed
+  by `AUTH_SECRET`, so there is no store and they survive restarts; codes
+  are single-use per process. Registration accepts only Claude's connector
+  callback (`https://claude.ai/api/mcp/auth_callback`, `claude.com` too) or
+  loopback redirect URIs. `loadAuthConfig` requires `PUBLIC_URL`,
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_EMAIL` and
+  `AUTH_SECRET` (≥32 bytes); the server refuses to start without them.
 
 `local/` is that stack's Docker Compose definition (not a pnpm package),
 deployed to the cloud VM (`docs/cloud-deploy.md`) — it is not run anywhere
@@ -42,11 +55,11 @@ with local Kyutai Pocket TTS (`alba-casual` by default; `TTS_VOICE` selects
 API; it streams a frame to Asterisk every 20 ms for the whole call because
 Asterisk drops a quiet AudioSocket connection. `ARI_BIND_ADDRESS` and
 `PIPELINE_BIND_ADDRESS` (both loopback by default) set the addresses of the
-ARI and pipeline API ports; `MCP_BIND_ADDRESS` (also loopback by default) sets `mcp-server`'s. Setting `CAPTURE_DIR` records each listening phase's inbound audio and speech detection under `local/captures/` for
+ARI and pipeline API ports; `mcp-server` is unpublished on the host, reached
+only through `caddy` at `MCP_PUBLIC_HOSTNAME`. Setting `CAPTURE_DIR` records each listening phase's inbound audio and speech detection under `local/captures/` for
 tuning with `local/voice-pipeline/scripts/analyze_capture.py` (off by default; it is the caller's room audio). Speech more than `LOUDNESS_MARGIN_DB` (12) quieter than the loudest in a reply counts as background and doesn't hold the reply open. On the VM
-(`docs/cloud-deploy.md`), `HOST_LAN_IP` is its public IP, `ARI_BIND_ADDRESS`/
-`PIPELINE_BIND_ADDRESS`/`MCP_BIND_ADDRESS` bind to its Tailscale IP, and
-Claude Code reaches `mcp-server` over the tailnet. With `PUBLIC_HOSTNAME`
+(`docs/cloud-deploy.md`), `HOST_LAN_IP` is its public IP and
+`ARI_BIND_ADDRESS`/`PIPELINE_BIND_ADDRESS` bind to its Tailscale IP. With `PUBLIC_HOSTNAME`
 set, `asterisk` serves SIP over TLS on
 `TLS_PORT` (5061) with Caddy's certificate (read from the `caddy-data` volume by
 `local/asterisk/start.sh`, which waits for it, copies it readable by `asterisk`
