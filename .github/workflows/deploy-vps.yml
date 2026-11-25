@@ -20,7 +20,7 @@ jobs:
         with:
           service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           environments: ${{ vars.OP_ENVIRONMENT_IDS }}
-      - uses: tailscale/github-action@v3
+      - uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ env.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ env.TAILSCALE_OAUTH_CLIENT_SECRET }}
