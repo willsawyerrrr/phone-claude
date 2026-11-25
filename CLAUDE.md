@@ -106,6 +106,8 @@ docker run --rm voice-pipeline-test`.
   ruleset requires, so any new job must be added to its `needs:`. The ruleset
   also requires a pull request (squash merges only) and blocks force pushes and
   deletion.
+- The `ios` job caches DerivedData, Swift packages included, with platform's
+  `xcode-cache` action.
 
 - `.github/workflows/deploy-ios.yml` runs on pushes to `main` that touch
   `ios/`. It calls platform's reusable `ios-testflight.yml`, which archives
