@@ -36,6 +36,21 @@ jobs:
       - run: docker build --target test -t voice-pipeline-test local/voice-pipeline
       - run: docker run --rm voice-pipeline-test
 
+  voice-pipeline-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: local/voice-pipeline
+          target: smoke
+          tags: voice-pipeline-smoke
+          load: true
+          cache-from: type=gha,scope=voice-pipeline-smoke
+          cache-to: type=gha,mode=max,scope=voice-pipeline-smoke
+      - run: docker run --rm voice-pipeline-smoke
+
   mcp-server-docker:
     runs-on: ubuntu-latest
     steps:
@@ -69,7 +84,13 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    needs: [ci, voice-pipeline, mcp-server-docker, local-scripts, ios]
+    needs:
+      - ci
+      - voice-pipeline
+      - voice-pipeline-smoke
+      - mcp-server-docker
+      - local-scripts
+      - ios
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any job failed or was cancelled

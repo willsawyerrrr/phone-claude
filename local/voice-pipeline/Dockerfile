@@ -48,6 +48,13 @@ RUN uv sync --locked --no-editable
 COPY tests ./tests
 CMD ["sh", "-c", "ruff check . && ruff format --check . && pytest"]
 
+# The model smoke tests, which fail rather than skip if the models are missing.
+FROM test AS smoke
+COPY --from=models /models /models
+ENV REQUIRE_MODELS=1
+# Loading the models can outlast the unit tests' 10s timeout.
+CMD ["pytest", "--timeout=120", "tests/test_models_smoke.py"]
+
 FROM base AS runtime
 COPY --from=models /models /models
 RUN useradd --system --no-create-home pipeline \

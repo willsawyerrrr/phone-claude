@@ -1,5 +1,7 @@
-"""Round-trips speech through the real models. Runs only where they're installed."""
+"""Round-trips speech through the real models. Runs only where they're
+installed, unless `REQUIRE_MODELS` is set, which makes missing models fail."""
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -12,7 +14,8 @@ MODELS = Path(Settings.from_env().models_dir)
 SETTINGS = Settings.from_env()
 
 pytestmark = pytest.mark.skipif(
-    not (MODELS / "silero_vad.onnx").exists(), reason="models not installed"
+    not (MODELS / "silero_vad.onnx").exists() and not os.environ.get("REQUIRE_MODELS"),
+    reason="models not installed",
 )
 
 

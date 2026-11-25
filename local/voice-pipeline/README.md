@@ -88,4 +88,9 @@ docker build --target test -t voice-pipeline-test .
 docker run --rm voice-pipeline-test
 ```
 
-Runs `ruff` and the unit tests, which use fake VAD, STT, and TTS engines and a fake AudioSocket client. `tests/test_models_smoke.py` round-trips speech through the real models and runs only where they are installed (the `runtime` image).
+Runs `ruff` and the unit tests, which use fake VAD, STT, and TTS engines and a fake AudioSocket client. `tests/test_models_smoke.py` round-trips speech through the real models and skips where they are not installed. The `smoke` image adds them and runs only those tests, failing if the models are missing:
+
+```sh
+docker build --target smoke -t voice-pipeline-smoke .
+docker run --rm voice-pipeline-smoke
+```
