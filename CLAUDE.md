@@ -94,7 +94,7 @@ device endpoint. See `ios/README.md`.
   `docker build --target test -t voice-pipeline-test local/voice-pipeline &&
 docker run --rm voice-pipeline-test`.
 - Stack scripts: `shellcheck local/up.sh local/audition.sh local/test-render-config.sh && local/test-render-config.sh`.
-- iOS (CI and the TestFlight deploy both pin `macos-26` and Xcode 26.6, the
+- iOS (CI and the TestFlight deploy both pin the `xcode-27` runner and Xcode 27.2, the
   newest GA Xcode on GitHub's runners): in `ios/`, `xcodegen generate`, then
   `xcodebuild test -project PhoneClaude.xcodeproj -scheme PhoneClaude
 -destination 'platform=iOS Simulator,name=<simulator>,OS=latest'`.
