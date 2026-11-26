@@ -2,7 +2,7 @@ name: PhoneClaude
 options:
   bundleIdPrefix: dev.willsawyerrrr
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "27.0"
 packages:
   linphone-sdk-swift-ios:
     url: https://github.com/BelledonneCommunications/linphone-sdk-swift-ios

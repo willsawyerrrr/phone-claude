@@ -6,7 +6,7 @@ Calls ring through CallKit, including from the lock screen. The app un-registers
 
 ## Build
 
-Requires Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). The Xcode project, `Info.plist` (background modes `voip` and `audio`), and entitlements (`aps-environment`) are generated from `project.yml` and not committed.
+The app requires iOS 27. Building needs Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). The Xcode project, `Info.plist` (background modes `voip` and `audio`), and entitlements (`aps-environment`) are generated from `project.yml` and not committed.
 
 ```sh
 cd ios
