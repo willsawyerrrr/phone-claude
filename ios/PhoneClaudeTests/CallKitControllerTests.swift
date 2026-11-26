@@ -5,9 +5,16 @@ import XCTest
 
 final class CallKitControllerTests: XCTestCase {
     func testDescribeNamesIncomingCallErrors() {
-        let error = NSError(
-            domain: CXErrorDomainIncomingCall, code: CXErrorCodeIncomingCallError.filteredByDoNotDisturb.rawValue)
-        XCTAssertTrue(CallKitController.describe(error).contains("filteredByDoNotDisturb"))
+        let names: [(CXErrorCodeIncomingCallError.Code, String)] = [
+            (.filteredByDoNotDisturb, "filteredByDoNotDisturb"),
+            (.filteredDuringRestrictedSharingMode, "filteredDuringRestrictedSharingMode"),
+            (.callIsProtected, "callIsProtected"),
+            (.filteredBySensitiveParticipants, "filteredBySensitiveParticipants"),
+        ]
+        for (code, name) in names {
+            let error = NSError(domain: CXErrorDomainIncomingCall, code: code.rawValue)
+            XCTAssertTrue(CallKitController.describe(error).contains("(\(name))"), name)
+        }
     }
 
     func testDescribeOtherErrorsByDomainAndCode() {

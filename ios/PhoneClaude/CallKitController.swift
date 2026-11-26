@@ -63,6 +63,9 @@ final class CallKitController: NSObject, CXProviderDelegate {
         case .callUUIDAlreadyExists: "callUUIDAlreadyExists"
         case .filteredByDoNotDisturb: "filteredByDoNotDisturb"
         case .filteredByBlockList: "filteredByBlockList"
+        case .filteredDuringRestrictedSharingMode: "filteredDuringRestrictedSharingMode"
+        case .callIsProtected: "callIsProtected"
+        case .filteredBySensitiveParticipants: "filteredBySensitiveParticipants"
         @unknown default: "unrecognised"
         }
     }
